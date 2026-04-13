@@ -378,11 +378,12 @@ export default function Admin() {
                     <div onClick={() => setExpandedId(isOpen ? null : ch.channelId)} style={{ display: "flex", alignItems: "center", gap: "14px", padding: "14px 18px", cursor: "pointer" }}>
                       <ChannelIcon src={ch.thumbnailUrl} name={ch.channelName} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "15px", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ch.channelName}</div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+                          <span style={{ fontSize: "15px", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ch.channelName}</span>
+                          {ch.subscriberCount > 0 && <span style={{ fontSize: "12px", color: "#64748b", flexShrink: 0 }}>{ch.subscriberCount >= 10000 ? `${(ch.subscriberCount / 10000).toFixed(1)}万人` : ch.subscriberCount >= 1000 ? `${(ch.subscriberCount / 1000).toFixed(1)}千人` : `${ch.subscriberCount}人`}</span>}
+                        </div>
                         <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>
-                          {ch.coverCount}曲
-                          {st === "pending" && ch.subscriberCount > 0 && <span style={{ marginLeft: "6px", color: "#64748b" }}>· {ch.subscriberCount >= 10000 ? `${(ch.subscriberCount / 10000).toFixed(1)}万人` : ch.subscriberCount >= 1000 ? `${(ch.subscriberCount / 1000).toFixed(1)}千人` : `${ch.subscriberCount}人`}</span>}
-                          <span style={{ marginLeft: "6px" }}>· {ch.sampleCovers.map(c => c.title).slice(0, 2).join(", ")}{ch.sampleCovers.length > 2 ? "..." : ""}</span>
+                          {ch.coverCount}曲 · {ch.sampleCovers.map(c => c.title).slice(0, 2).join(", ")}{ch.sampleCovers.length > 2 ? "..." : ""}
                         </div>
                       </div>
                       <StatusBadge status={st} />
