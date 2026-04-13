@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/build-catalog.js)",
+      "Bash(xxd .env)",
+      "Bash(node -e ':*)",
+      "Bash(node scripts/fetch-data.js)",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/songCatalog.json','utf8'\\)\\); console.log\\('Artists:', d.artists.length\\); let s=0; d.artists.forEach\\(a=>s+=a.songs.length\\); console.log\\('Songs:', s\\); d.artists.forEach\\(a=>console.log\\(' -', a.name, ':', a.songs.length, 'songs'\\)\\)\")",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/metadata.json','utf8'\\)\\); console.log\\('Songs\\(covers\\):', d.songs.length\\); console.log\\('Singers:', d.singers.length\\); const artists=new Set\\(\\); d.songs.forEach\\(s=>artists.add\\(s.originalArtist\\)\\); console.log\\('Unique original artists:', artists.size\\); artists.forEach\\(a=>console.log\\(' -', a\\)\\)\")",
+      "Bash(node -e \"const p=JSON.parse\\(require\\('fs'\\).readFileSync\\('package.json','utf8'\\)\\); console.log\\('dependencies:'\\); Object.entries\\(p.dependencies||{}\\).forEach\\(\\([k,v]\\)=>console.log\\(' ', k, v\\)\\); console.log\\('devDependencies:'\\); Object.entries\\(p.devDependencies||{}\\).forEach\\(\\([k,v]\\)=>console.log\\(' ', k, v\\)\\)\")",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/songCatalog.json','utf8'\\)\\); d.artists.forEach\\(a=>console.log\\(a.name\\)\\)\")",
+      "Bash(npx vite:*)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/songCatalog.json','utf8'\\)\\); console.log\\('Artists:', d.artists.length\\)\")",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/songCatalog.json','utf8'\\)\\); let s=0; d.artists.forEach\\(a=>s+=a.songs.length\\); let jp=0,en=0; d.artists.forEach\\(a=>{if\\(/[\\\\u3000-\\\\u9FFF\\\\uF900-\\\\uFAFF]/.test\\(a.name\\)\\)jp++;else en++}\\); console.log\\('Artists:',d.artists.length,'Songs:',s,'JP names:',jp,'EN names:',en\\)\")",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/songCatalog.json','utf8'\\)\\); let s=0; d.artists.forEach\\(a=>s+=a.songs.length\\); let jp=0,en=0; d.artists.forEach\\(a=>{if\\(/[\\\\u3000-\\\\u9FFF\\\\uF900-\\\\uFAFF]/.test\\(a.name\\)\\)jp++;else en++}\\); console.log\\('Artists:',d.artists.length,'Songs:',s,'JP names:',jp,'EN names:',en\\); console.log\\('File size:', \\(fs.statSync\\('src/data/songCatalog.json'\\).size/1024/1024\\).toFixed\\(1\\)+'MB'\\)\")",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/songCatalog.json','utf8'\\)\\); let s=0; d.artists.forEach\\(a=>s+=a.songs.length\\); let jp=0,en=0; d.artists.forEach\\(a=>{if\\(/[\\\\u3000-\\\\u9FFF\\\\uF900-\\\\uFAFF]/.test\\(a.name\\)\\)jp++;else en++}\\); const mb=\\(require\\('fs'\\).statSync\\('src/data/songCatalog.json'\\).size/1024/1024\\).toFixed\\(1\\); console.log\\(d.artists.length+' artists, '+s+' songs, JP:'+jp+' EN:'+en+', '+mb+'MB'\\)\")",
+      "Bash(npm install:*)",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('Home:', !!l.Home\\); console.log\\('Search:', !!l.Search\\); console.log\\('Library:', !!l.Library\\); console.log\\('LibraryBig:', !!l.LibraryBig\\); console.log\\('ListMusic:', !!l.ListMusic\\);\")",
+      "Bash(grep -o \"nav-circle-btn\" dist/assets/index-*.js)",
+      "Bash(npx sharp-cli:*)",
+      "Bash(npm ls:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node scripts/fetch-preview.js)",
+      "Bash(sed -i 's/useAdminStore\\(s => s.getRejectedIds\\(\\)\\)/useAdminStore\\(s => s.rejectedIds\\)/g' src/pages/Home.jsx src/pages/Search.jsx src/pages/SongCovers.jsx src/pages/ArtistSongs.jsx src/pages/SingerPage.jsx)",
+      "Bash(sed -i 's/useAdminStore.getState\\(\\).getRejectedIds\\(\\)/useAdminStore.getState\\(\\).rejectedIds/g' src/hooks/useYouTubeAPI.js)"
+    ]
+  }
+}
