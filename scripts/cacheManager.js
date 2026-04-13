@@ -6,13 +6,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const CACHE_PATH = path.join(__dirname, '../src/data/apiCache.json')
 
-const TTL = {
-  youtubeSearches: 7 * 24 * 60 * 60 * 1000,   // 7 days
-  youtubeChannels: 30 * 24 * 60 * 60 * 1000,   // 30 days
-  youtubeVideos: 30 * 24 * 60 * 60 * 1000,
-  deezerTracks: 30 * 24 * 60 * 60 * 1000,
-  spotifyArtists: 30 * 24 * 60 * 60 * 1000,
-}
+const CATEGORIES = ['youtubeSearches', 'youtubeChannels', 'youtubeVideos', 'deezerTracks', 'spotifyArtists']
 
 let _cache = null
 let _hits = 0
@@ -25,8 +19,7 @@ export function loadCache() {
   } catch {
     _cache = {}
   }
-  // Ensure all categories exist
-  for (const k of Object.keys(TTL)) {
+  for (const k of CATEGORIES) {
     if (!_cache[k]) _cache[k] = {}
   }
   return _cache
@@ -40,9 +33,6 @@ export function saveCache() {
 export function getCached(category, key) {
   const entry = _cache?.[category]?.[key]
   if (!entry) { _misses++; return null }
-  // Check TTL
-  const age = Date.now() - new Date(entry.fetchedAt).getTime()
-  if (age > (TTL[category] || Infinity)) { _misses++; return null }
   _hits++
   return entry.data
 }
