@@ -91,3 +91,92 @@ export async function scanChannel(channelId, channelName, onProgress = () => {})
   onProgress({ found: totalFound, filtered: covers.length, current: '完了' })
   return { covers, totalFound, totalFiltered: covers.length }
 }
+
+// Build flat song list for random picking
+const allSongs = []
+for (const artist of catalogData.artists) {
+  for (const song of artist.songs) {
+    allSongs.push({ title: song.title, artist: artist.name })
+  }
+}
+
+/**
+ * Discover new channels not yet in knownIds.
+ * @param {number} count - How many new channels to find
+ * @param {Set} knownIds - channelIds already in preview list
+ * @param {function} onProgress - ({found, target, current}) => void
+ * @returns {Promise<Array>} New channel objects ready for previewChannels
+ */
+export async function discoverNewChannels(count, knownIds, onProgress = () => {}) {
+  const newChannels = new Map()
+  const maxAttempts = count * 5 // Don't loop forever
+  let attempts = 0
+
+  while (newChannels.size < count && attempts < maxAttempts) {
+    attempts++
+    // Pick random song
+    const song = allSongs[Math.floor(Math.random() * allSongs.length)]
+    const query = encodeURIComponent(`${song.title} ${song.artist} 歌ってみた`)
+
+    let items
+    try {
+      const data = await ytFetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&type=video&maxResults=10`)
+      items = data.items || []
+    } catch (e) {
+      if (e.message === 'ALL_KEYS_EXHAUSTED') throw e
+      continue
+    }
+
+    for (const item of items) {
+      if (newChannels.size >= count) break
+      const chId = item.snippet?.channelId
+      if (!chId || knownIds.has(chId) || newChannels.has(chId)) continue
+
+      const lower = (item.snippet?.title || '').toLowerCase()
+      if (EXCLUDE_KEYWORDS.some(k => lower.includes(k.toLowerCase()))) continue
+      if (!['歌ってみた', 'cover', 'カバー'].some(k => lower.includes(k))) continue
+
+      const videoId = item.id?.videoId
+      newChannels.set(chId, {
+        channelId: chId,
+        channelName: item.snippet.channelTitle,
+        channelUrl: `https://www.youtube.com/channel/${chId}`,
+        thumbnailUrl: '',
+        subscriberCount: 0,
+        sampleCovers: [{
+          videoId,
+          title: song.title,
+          originalArtist: song.artist,
+          publishedAt: item.snippet.publishedAt?.split('T')[0] || '',
+          thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+        }],
+        totalFound: 1,
+        fetchedAt: new Date().toISOString(),
+      })
+
+      onProgress({ found: newChannels.size, target: count, current: item.snippet.channelTitle })
+    }
+
+    await sleep(300)
+  }
+
+  // Batch fetch channel details (thumbnail + subscriber count)
+  const ids = [...newChannels.keys()]
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50).join(',')
+    try {
+      const data = await ytFetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${batch}`)
+      for (const item of (data.items || [])) {
+        const ch = newChannels.get(item.id)
+        if (ch) {
+          ch.thumbnailUrl = item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || ''
+          ch.subscriberCount = parseInt(item.statistics?.subscriberCount || '0', 10)
+        }
+      }
+    } catch { /* ignore */ }
+    await sleep(300)
+  }
+
+  onProgress({ found: newChannels.size, target: count, current: '完了' })
+  return [...newChannels.values()]
+}

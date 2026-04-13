@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import AdminChannelDetail, { StatusBadge } from "./AdminChannelDetail";
 import { useAdminStore } from "../store/useAdminStore";
-import { scanChannel } from "../utils/channelScanner";
+import { scanChannel, discoverNewChannels } from "../utils/channelScanner";
+import previewRawOriginal from "../data/previewChannels.json";
 
 // ── Covery Host Admin Panel ──
 const ADMIN_PASSWORD = "covery2026";
@@ -181,6 +182,8 @@ export default function Admin() {
   const [expandedId, setExpandedId] = useState(null);
   const [miniPlayer, setMiniPlayer] = useState(null);
   const [scanError, setScanError] = useState(null);
+  const [channels, setChannels] = useState(() => PREVIEW_CHANNELS);
+  const replenishingRef = useRef(false);
 
   const decisions = useAdminStore(s => s.decisions);
   const devMode = useAdminStore(s => s.devMode);
@@ -191,8 +194,41 @@ export default function Admin() {
   const completeScan = useAdminStore(s => s.completeScan);
   const failScan = useAdminStore(s => s.failScan);
   const updateScanProgress = useAdminStore(s => s.updateScanProgress);
+  const autoReplenish = useAdminStore(s => s.autoReplenish);
+  const setAutoReplenish = useAdminStore(s => s.setAutoReplenish);
+  const replenishProgress = useAdminStore(s => s.replenishProgress);
+  const setReplenishProgress = useAdminStore(s => s.setReplenishProgress);
 
   const save = useCallback((d) => saveDecisions(d), [saveDecisions]);
+
+  // Count pending
+  const pendingCount = useMemo(() => channels.filter(ch => !decisions[ch.channelId] || decisions[ch.channelId] === 'pending').length, [channels, decisions]);
+
+  // Auto-replenish when pending drops below 200
+  const TARGET_PENDING = 200;
+  useEffect(() => {
+    if (!autoReplenish || !isLoggedIn || pendingCount >= TARGET_PENDING || replenishingRef.current) return;
+    const needed = TARGET_PENDING - pendingCount;
+    if (needed <= 0) return;
+
+    replenishingRef.current = true;
+    const knownIds = new Set(channels.map(c => c.channelId));
+    // Also skip decided channels
+    Object.keys(decisions).forEach(id => knownIds.add(id));
+
+    discoverNewChannels(needed, knownIds, (p) => setReplenishProgress(p))
+      .then(newChs => {
+        if (newChs.length > 0) {
+          setChannels(prev => [...prev, ...newChs]);
+        }
+        setReplenishProgress(null);
+        replenishingRef.current = false;
+      })
+      .catch(() => {
+        setReplenishProgress(null);
+        replenishingRef.current = false;
+      });
+  }, [pendingCount, autoReplenish, isLoggedIn]);
 
   const handleLogin = () => { if (password === ADMIN_PASSWORD) { setIsLoggedIn(true); setError(""); } else setError("パスワードが違います"); };
   const getStatus = (id) => decisions[id] || "pending";
@@ -214,22 +250,22 @@ export default function Admin() {
     const a = vals.filter(v => v === "approved").length;
     const s = vals.filter(v => v === "scanning").length;
     const r = vals.filter(v => v === "rejected").length;
-    return { approved: a, scanning: s, rejected: r, pending: PREVIEW_CHANNELS.length - a - s - r, total: PREVIEW_CHANNELS.length };
-  }, [decisions]);
+    return { approved: a, scanning: s, rejected: r, pending: channels.length - a - s - r, total: channels.length };
+  }, [decisions, channels]);
 
-  const filtered = useMemo(() => PREVIEW_CHANNELS.filter(ch => {
+  const filtered = useMemo(() => channels.filter(ch => {
     if (filter !== "all" && getStatus(ch.channelId) !== filter) return false;
     if (searchQuery && !ch.channelName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   }), [filter, searchQuery, decisions]);
 
   const exportList = () => {
-    const channels = PREVIEW_CHANNELS.filter(ch => getStatus(ch.channelId) === "approved").map(ch => ({
+    const approved = channels.filter(ch => getStatus(ch.channelId) === "approved").map(ch => ({
       channelId: ch.channelId,
       channelName: ch.channelName,
       thumbnailUrl: ch.thumbnailUrl || "",
     }));
-    const blob = new Blob([JSON.stringify({ channels }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ channels: approved }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "approvedChannels.json";
@@ -290,11 +326,23 @@ export default function Admin() {
               <StatsCard label="未審査" value={stats.pending} color="#eab308" />
             </div>
 
-            {/* Dev mode toggle */}
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "12px 16px", borderRadius: "12px", background: "rgba(20,24,50,0.6)", border: "1px solid rgba(99,102,241,0.1)" }}>
-              <span style={{ fontSize: "13px", color: "#94a3b8" }}>ユーザー画面表示:</span>
-              <button onClick={() => setDevMode(true)} style={{ padding: "6px 14px", borderRadius: "8px", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer", background: devMode ? "rgba(99,102,241,0.3)" : "transparent", color: devMode ? "#818cf8" : "#64748b" }}>全表示（開発）</button>
-              <button onClick={() => setDevMode(false)} style={{ padding: "6px 14px", borderRadius: "8px", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer", background: !devMode ? "rgba(34,197,94,0.3)" : "transparent", color: !devMode ? "#22c55e" : "#64748b" }}>承認のみ（本番）</button>
+            {/* Settings row */}
+            <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 16px", borderRadius: "12px", background: "rgba(20,24,50,0.6)", border: "1px solid rgba(99,102,241,0.1)", flex: 1, minWidth: "240px" }}>
+                <span style={{ fontSize: "12px", color: "#94a3b8" }}>表示:</span>
+                <button onClick={() => setDevMode(true)} style={{ padding: "5px 12px", borderRadius: "8px", border: "none", fontSize: "11px", fontWeight: 600, cursor: "pointer", background: devMode ? "rgba(99,102,241,0.3)" : "transparent", color: devMode ? "#818cf8" : "#64748b" }}>全表示</button>
+                <button onClick={() => setDevMode(false)} style={{ padding: "5px 12px", borderRadius: "8px", border: "none", fontSize: "11px", fontWeight: 600, cursor: "pointer", background: !devMode ? "rgba(34,197,94,0.3)" : "transparent", color: !devMode ? "#22c55e" : "#64748b" }}>承認のみ</button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 16px", borderRadius: "12px", background: "rgba(20,24,50,0.6)", border: "1px solid rgba(99,102,241,0.1)" }}>
+                <span style={{ fontSize: "12px", color: "#94a3b8" }}>自動補充:</span>
+                <button onClick={() => setAutoReplenish(!autoReplenish)} style={{ padding: "5px 12px", borderRadius: "8px", border: "none", fontSize: "11px", fontWeight: 600, cursor: "pointer", background: autoReplenish ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.15)", color: autoReplenish ? "#22c55e" : "#ef4444" }}>{autoReplenish ? "ON" : "OFF"}</button>
+                {replenishProgress && (
+                  <span style={{ fontSize: "11px", color: "#3b82f6", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ width: 10, height: 10, border: "2px solid #3b82f6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
+                    {replenishProgress.found}/{replenishProgress.target}件
+                  </span>
+                )}
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap", alignItems: "center" }}>

@@ -67,10 +67,15 @@ export const useAdminStore = create((set, get) => ({
   },
 
   failScan: (channelId, error) => {
-    // Revert to pending
     const d = { ...get().decisions, [channelId]: 'pending' }
     saveJSON(DECISIONS_KEY, d)
     const { [channelId]: _, ...restProgress } = get().scanProgress
     set({ decisions: d, approvedIds: buildApprovedIds(d), scanProgress: restProgress })
   },
+
+  // Auto-replenish state
+  autoReplenish: true,
+  replenishProgress: null, // { found, target, current } or null
+  setAutoReplenish: (val) => set({ autoReplenish: val }),
+  setReplenishProgress: (p) => set({ replenishProgress: p }),
 }))
