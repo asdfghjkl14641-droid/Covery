@@ -33,7 +33,8 @@
       "Bash(powershell.exe -Command \"Get-Command gh -ErrorAction SilentlyContinue | Select-Object Source\")",
       "Bash(node scripts/check-rss-updates.js)",
       "Bash(node scripts/cleanup-shorts.js)",
-      "Bash(node scripts/rematch-covers.js)"
+      "Bash(node scripts/rematch-covers.js)",
+      "Bash(node scripts/cleanup-duration.js)"
     ]
   }
 }
