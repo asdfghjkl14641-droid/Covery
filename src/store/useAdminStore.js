@@ -24,7 +24,7 @@ const initDec = loadJSON(DECISIONS_KEY, {})
 export const useAdminStore = create((set, get) => ({
   decisions: initDec,
   approvedIds: buildApprovedIds(initDec),
-  devMode: localStorage.getItem(DEVMODE_KEY) !== 'false',
+  devMode: localStorage.getItem(DEVMODE_KEY) === 'true',
 
   // Preview channels — persisted in localStorage
   previewChannels: loadJSON(CHANNELS_KEY, null), // null = not yet initialized
