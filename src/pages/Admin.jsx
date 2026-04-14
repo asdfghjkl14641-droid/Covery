@@ -281,7 +281,10 @@ export default function Admin() {
           <div style={{ fontSize: "13px", color: "#94a3b8", marginTop: "8px", letterSpacing: "3px", textTransform: "uppercase" }}>Host Panel</div>
         </div>
         <label style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "8px", display: "block" }}>パスワード</label>
-        <input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="ホストパスワードを入力" style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(99,102,241,0.2)", background: "rgba(10,14,39,0.8)", color: "#f1f5f9", fontSize: "15px", outline: "none", marginBottom: "6px" }} />
+        <form onSubmit={e => { e.preventDefault(); handleLogin(); }} autoComplete="on">
+          <input type="text" name="username" value="covery-host" readOnly hidden autoComplete="username" />
+          <input type="password" name="password" autoComplete="current-password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} placeholder="ホストパスワードを入力" style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(99,102,241,0.2)", background: "rgba(10,14,39,0.8)", color: "#f1f5f9", fontSize: "15px", outline: "none", marginBottom: "6px" }} />
+        </form>
         {error && <div style={{ color: "#ef4444", fontSize: "13px", marginBottom: "8px" }}>{error}</div>}
         <button onClick={handleLogin} style={{ width: "100%", padding: "14px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#818cf8)", color: "#fff", fontSize: "15px", fontWeight: 600, cursor: "pointer", marginTop: "12px" }}>ログイン</button>
         <div style={{ textAlign: "center", marginTop: "24px", fontSize: "12px", color: "#64748b" }}>管理者専用ページです</div>
