@@ -1,17 +1,23 @@
 import axios from 'axios'
 
-const keys = [
-  process.env.YOUTUBE_API_KEY,
-  ...Array.from({ length: 30 }, (_, i) => process.env[`YOUTUBE_API_KEY_${i + 1}`]),
-].filter(Boolean)
-
+let keys = null
 let currentIndex = 0
 
+function ensureKeys() {
+  if (keys) return
+  keys = [
+    process.env.YOUTUBE_API_KEY,
+    ...Array.from({ length: 30 }, (_, i) => process.env[`YOUTUBE_API_KEY_${i + 1}`]),
+  ].filter(Boolean)
+}
+
 export function getApiKey() {
+  ensureKeys()
   return keys[currentIndex]
 }
 
 export function rotateKey() {
+  ensureKeys()
   currentIndex++
   if (currentIndex >= keys.length) {
     throw new Error('ALL_KEYS_EXHAUSTED')
@@ -21,15 +27,12 @@ export function rotateKey() {
 }
 
 export function getKeyStatus() {
+  ensureKeys()
   return `キー ${Math.min(currentIndex + 1, keys.length)}/${keys.length}`
 }
 
-/**
- * Fetch from YouTube API with automatic key rotation on 403.
- * @param {string} url - Full URL without &key= parameter
- * @returns {Promise<object>} JSON response
- */
 export async function ytFetch(url) {
+  ensureKeys()
   const sep = url.includes('?') ? '&' : '?'
 
   while (currentIndex < keys.length) {
@@ -38,14 +41,10 @@ export async function ytFetch(url) {
       return res.data
     } catch (e) {
       if (e.response?.status === 403) {
-        try {
-          rotateKey()
-        } catch {
-          throw new Error('ALL_KEYS_EXHAUSTED')
-        }
-        continue // retry with new key
+        try { rotateKey() } catch { throw new Error('ALL_KEYS_EXHAUSTED') }
+        continue
       }
-      throw e // other error, don't retry
+      throw e
     }
   }
 
