@@ -5,7 +5,10 @@ import { scanChannel, discoverNewChannels } from "../utils/channelScanner";
 import previewRawOriginal from "../data/previewChannels.json";
 
 // ── Covery Host Admin Panel ──
-const ADMIN_PASSWORD = "covery2026";
+const ADMIN_ACCOUNTS = [
+  { email: "sakanouenot14641@icloud.com", password: "Minoru14641Hg" },
+  { email: "asdfghjkl14641@gmail.com", password: "Minoru14641Hg" },
+];
 
 // Storage Polyfill for non-tauri/special environments
 const storage = window.storage || {
@@ -173,7 +176,8 @@ const StatsCard = ({ label, value, color }) => (
 );
 
 export default function Admin() {
-  const [isLoggedIn, setIsLoggedIn] = useState(import.meta.env.DEV);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
@@ -230,7 +234,11 @@ export default function Admin() {
       });
   }, [pendingCount, autoReplenish, isLoggedIn]);
 
-  const handleLogin = () => { if (password === ADMIN_PASSWORD) { setIsLoggedIn(true); setError(""); } else setError("パスワードが違います"); };
+  const handleLogin = () => {
+    const match = ADMIN_ACCOUNTS.find(a => a.email === email.trim() && a.password === password);
+    if (match) { setIsLoggedIn(true); setError(""); }
+    else setError("メールアドレスまたはパスワードが違います");
+  };
   const getStatus = (id) => decisions[id] || "pending";
 
   const handleApprove = async (ch) => {
@@ -280,13 +288,14 @@ export default function Admin() {
           <div style={{ fontSize: "36px", fontWeight: 800, background: "linear-gradient(135deg,#6366f1,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Covery</div>
           <div style={{ fontSize: "13px", color: "#94a3b8", marginTop: "8px", letterSpacing: "3px", textTransform: "uppercase" }}>Host Panel</div>
         </div>
-        <label style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "8px", display: "block" }}>パスワード</label>
         <form onSubmit={e => { e.preventDefault(); handleLogin(); }} autoComplete="on">
-          <input type="text" name="username" value="covery-host" readOnly hidden autoComplete="username" />
-          <input type="password" name="password" autoComplete="current-password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} placeholder="ホストパスワードを入力" style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(99,102,241,0.2)", background: "rgba(10,14,39,0.8)", color: "#f1f5f9", fontSize: "15px", outline: "none", marginBottom: "6px" }} />
+          <label style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "6px", display: "block" }}>メールアドレス</label>
+          <input type="email" name="email" autoComplete="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} placeholder="メールアドレスを入力" style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(99,102,241,0.2)", background: "rgba(10,14,39,0.8)", color: "#f1f5f9", fontSize: "15px", outline: "none", marginBottom: "16px" }} />
+          <label style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "6px", display: "block" }}>パスワード</label>
+          <input type="password" name="password" autoComplete="current-password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} placeholder="パスワードを入力" style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(99,102,241,0.2)", background: "rgba(10,14,39,0.8)", color: "#f1f5f9", fontSize: "15px", outline: "none", marginBottom: "6px" }} />
+          {error && <div style={{ color: "#ef4444", fontSize: "13px", marginBottom: "8px", marginTop: "8px" }}>{error}</div>}
+          <button type="submit" style={{ width: "100%", padding: "14px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#818cf8)", color: "#fff", fontSize: "15px", fontWeight: 600, cursor: "pointer", marginTop: "12px" }}>ログイン</button>
         </form>
-        {error && <div style={{ color: "#ef4444", fontSize: "13px", marginBottom: "8px" }}>{error}</div>}
-        <button onClick={handleLogin} style={{ width: "100%", padding: "14px", borderRadius: "12px", border: "none", background: "linear-gradient(135deg,#6366f1,#818cf8)", color: "#fff", fontSize: "15px", fontWeight: 600, cursor: "pointer", marginTop: "12px" }}>ログイン</button>
         <div style={{ textAlign: "center", marginTop: "24px", fontSize: "12px", color: "#64748b" }}>管理者専用ページです</div>
       </div>
     </div>
