@@ -18,7 +18,8 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
   const approvedIds = useAdminStore(s => s.approvedIds)
   const devMode = useAdminStore(s => s.devMode)
   const scanResults = useAdminStore(s => s.scanResults)
-  const songs = useMemo(() => getApprovedSongs(), [approvedIds, devMode, scanResults])
+  const coverDecisions = useAdminStore(s => s.coverDecisions)
+  const songs = useMemo(() => getApprovedSongs(), [approvedIds, devMode, scanResults, coverDecisions])
   const singers = useMemo(() => getApprovedSingers(), [approvedIds, devMode])
 
   // Build cover song groups from filtered data

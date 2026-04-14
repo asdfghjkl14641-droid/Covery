@@ -207,6 +207,9 @@ export default function Admin() {
   const initChannels = useAdminStore(s => s.initChannels);
   const addChannels = useAdminStore(s => s.addChannels);
   const getKnownChannelIds = useAdminStore(s => s.getKnownChannelIds);
+  const coverDecisions = useAdminStore(s => s.coverDecisions);
+  const rejectCover = useAdminStore(s => s.rejectCover);
+  const setCoverDecision = useAdminStore(s => s.setCoverDecision);
 
   // Initialize channels from JSON file if localStorage is empty
   useEffect(() => {
@@ -429,7 +432,14 @@ export default function Admin() {
                                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{sc.title}</span>
                                     {sc.duration && <span style={{ fontSize: "10px", color: "#64748b", flexShrink: 0 }}>{sc.duration}</span>}
                                   </div>
-                                  {sc.originalArtist && <div style={{ fontSize: "10px", color: "#6366f1" }}>{sc.originalArtist}</div>}
+                                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                    {sc.originalArtist && <span style={{ fontSize: "10px", color: "#6366f1", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sc.originalArtist}</span>}
+                                    {coverDecisions[sc.videoId] === "rejected" ? (
+                                      <button onClick={e => { e.stopPropagation(); setCoverDecision(sc.videoId, "approved"); }} style={{ fontSize: "9px", padding: "1px 6px", borderRadius: "8px", border: "none", background: "rgba(239,68,68,0.2)", color: "#ef4444", cursor: "pointer", flexShrink: 0 }}>拒否中</button>
+                                    ) : (
+                                      <button onClick={e => { e.stopPropagation(); rejectCover(sc.videoId); }} style={{ fontSize: "9px", padding: "1px 6px", borderRadius: "8px", border: "none", background: "rgba(148,163,184,0.1)", color: "#64748b", cursor: "pointer", flexShrink: 0 }}>✕</button>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
                             </div>

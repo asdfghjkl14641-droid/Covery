@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 const DECISIONS_KEY = 'covery-channel-decisions'
+const COVER_DECISIONS_KEY = 'covery-cover-decisions'
 const DEVMODE_KEY = 'covery-dev-mode'
 const SCAN_RESULTS_KEY = 'covery-scan-results'
 const CHANNELS_KEY = 'covery-preview-channels'
@@ -27,6 +28,9 @@ export const useAdminStore = create((set, get) => ({
 
   // Preview channels — persisted in localStorage
   previewChannels: loadJSON(CHANNELS_KEY, null), // null = not yet initialized
+
+  // Per-cover decisions (persisted)
+  coverDecisions: loadJSON(COVER_DECISIONS_KEY, {}), // { videoId: 'approved'|'rejected' }
 
   // Scan state
   scanProgress: {},
@@ -97,6 +101,19 @@ export const useAdminStore = create((set, get) => ({
     saveJSON(DECISIONS_KEY, d)
     const { [channelId]: _, ...restProgress } = get().scanProgress
     set({ decisions: d, approvedIds: buildApprovedIds(d), scanProgress: restProgress })
+  },
+
+  // ── Per-cover decisions ──
+  setCoverDecision: (videoId, status) => {
+    const cd = { ...get().coverDecisions, [videoId]: status }
+    saveJSON(COVER_DECISIONS_KEY, cd)
+    set({ coverDecisions: cd })
+  },
+
+  rejectCover: (videoId) => {
+    const cd = { ...get().coverDecisions, [videoId]: 'rejected' }
+    saveJSON(COVER_DECISIONS_KEY, cd)
+    set({ coverDecisions: cd })
   },
 
   // Auto-replenish state (in-memory only)

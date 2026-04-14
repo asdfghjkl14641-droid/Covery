@@ -3,24 +3,33 @@ import metadata from '../data/metadata.json'
 
 /**
  * Get all songs visible to users.
- * devMode=true → show all from metadata.json
- * devMode=false → show only approved channels (metadata + scanResults merged)
+ * devMode=true → show all (bypass all filters)
+ * devMode=false → approved channels only, excluding individually rejected covers
  */
 export function getApprovedSongs() {
-  const { approvedIds, devMode, scanResults } = useAdminStore.getState()
+  const { approvedIds, devMode, scanResults, coverDecisions } = useAdminStore.getState()
 
+  // Dev mode: show everything
   if (devMode) return metadata.songs
-  if (!approvedIds || approvedIds.size === 0) return metadata.songs // fallback: 0 approved = show all
 
-  // Filter metadata songs to approved channels
+  // No approved channels: show all as fallback (so app isn't empty during development)
+  if (!approvedIds || approvedIds.size === 0) return metadata.songs
+
+  const rejectedVideoIds = new Set(
+    Object.entries(coverDecisions || {}).filter(([, v]) => v === 'rejected').map(([k]) => k)
+  )
+
+  // Filter metadata songs to approved channels + not individually rejected
   const songs = metadata.songs
     .map(s => ({
       ...s,
-      covers: (s.covers || []).filter(c => approvedIds.has(c.singerId))
+      covers: (s.covers || []).filter(c =>
+        approvedIds.has(c.singerId) && !rejectedVideoIds.has(c.videoId)
+      )
     }))
     .filter(s => s.covers.length > 0)
 
-  // Merge scanResults covers
+  // Merge scanResults covers from approved channels
   const existingVideoIds = new Set()
   songs.forEach(s => s.covers.forEach(c => existingVideoIds.add(c.videoId)))
 
@@ -28,9 +37,9 @@ export function getApprovedSongs() {
     if (!approvedIds.has(channelId) || !result?.covers) continue
     for (const cover of result.covers) {
       if (existingVideoIds.has(cover.videoId)) continue
+      if (rejectedVideoIds.has(cover.videoId)) continue
       existingVideoIds.add(cover.videoId)
 
-      const existing = songs.find(s => s.title === cover.title && s.originalArtist === cover.originalArtist)
       const coverEntry = {
         videoId: cover.videoId,
         singerId: cover.channelId || channelId,
@@ -38,6 +47,7 @@ export function getApprovedSongs() {
         thumbnailUrl: cover.thumbnailUrl || `https://img.youtube.com/vi/${cover.videoId}/hqdefault.jpg`,
       }
 
+      const existing = songs.find(s => s.title === cover.title && s.originalArtist === cover.originalArtist)
       if (existing) {
         existing.covers.push(coverEntry)
       } else {
@@ -53,22 +63,18 @@ export function getApprovedSongs() {
     }
   }
 
+  console.log(`[Covery] 承認チャンネル: ${approvedIds.size}件, 表示曲: ${songs.length}曲`)
   return songs
 }
 
-/**
- * Get singers visible to users.
- */
 export function getApprovedSingers() {
   const { approvedIds, devMode } = useAdminStore.getState()
-
   if (devMode) return metadata.singers
   if (!approvedIds || approvedIds.size === 0) return metadata.singers
-
   return metadata.singers.filter(s => approvedIds.has(s.channelId))
 }
 
-// Legacy wrappers (used by pages that pass approvedIds/devMode as args)
+// Legacy wrappers
 export function filterSongs(songs, approvedIds, devMode) {
   if (devMode) return songs
   if (!approvedIds || approvedIds.size === 0) return songs
