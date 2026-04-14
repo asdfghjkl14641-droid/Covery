@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 import { Home as HomeIcon, Search as SearchIcon, Library as LibraryIcon } from 'lucide-react'
 import Home from './pages/Home'
@@ -20,43 +20,62 @@ function App() {
   const [viewingSong, setViewingSong] = useState(null)
   const [viewingArtist, setViewingArtist] = useState(null)
   const [viewingSinger, setViewingSinger] = useState(null)
-  const [prevTab, setPrevTab] = useState('home')
+  const [tabHistory, setTabHistory] = useState([])
   const { isFullscreen, isVideoVisible } = usePlayerStore()
-  
-  // Initialize YouTube API and Player
+
   useYouTubeAPI()
 
-  const navigateToCovers = (songTitle) => {
-    setPrevTab(activeTab)
+  // Push current tab to history, then navigate
+  const pushAndNavigate = useCallback((newTab) => {
+    setTabHistory(prev => [...prev, activeTab])
+    setActiveTab(newTab)
+    window.history.pushState({ tab: newTab }, '')
+    window.scrollTo(0, 0)
+  }, [activeTab])
+
+  const navigateToCovers = useCallback((songTitle) => {
     setViewingSong(songTitle)
-    setActiveTab('song-covers')
-    window.scrollTo(0, 0)
-  }
+    pushAndNavigate('song-covers')
+  }, [pushAndNavigate])
 
-  const navigateToArtist = (artistName) => {
-    setPrevTab(activeTab)
+  const navigateToArtist = useCallback((artistName) => {
     setViewingArtist(artistName)
-    setActiveTab('artist-songs')
-    window.scrollTo(0, 0)
-  }
+    pushAndNavigate('artist-songs')
+  }, [pushAndNavigate])
 
-  const navigateToSinger = (singerId) => {
-    setPrevTab(activeTab)
+  const navigateToSinger = useCallback((singerId) => {
     setViewingSinger(singerId)
-    setActiveTab('singer-page')
-    window.scrollTo(0, 0)
-  }
+    pushAndNavigate('singer-page')
+  }, [pushAndNavigate])
 
-  const goBack = () => {
-    setActiveTab(prevTab)
+  const goBack = useCallback(() => {
+    setTabHistory(prev => {
+      const copy = [...prev]
+      const previous = copy.pop() || 'home'
+      setActiveTab(previous)
+      return copy
+    })
     window.scrollTo(0, 0)
-  }
+  }, [])
+
+  // Top-level nav (home/search/playlist) resets history
+  const navTo = useCallback((tab) => {
+    setTabHistory([])
+    setActiveTab(tab)
+  }, [])
+
+  // Browser back button support
+  useEffect(() => {
+    const handlePopState = () => goBack()
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [goBack])
 
   return (
     <div className="app-layout">
       <div className="main-view">
         {/* Navigation moved inside main-view to allow normal scrolling */}
-        {activeTab !== 'admin' && <Header activeTab={activeTab} setActiveTab={setActiveTab} />}
+        {activeTab !== 'admin' && <Header activeTab={activeTab} setActiveTab={navTo} />}
         
         <main className="main-content" style={{ padding: activeTab === 'admin' ? '0' : '0 24px 100px 24px', flex: 1 }}>
           <div id="youtube-player-global" className={`youtube-container-global ${isFullscreen ? 'visible' : 'hidden'} ${isFullscreen && !isVideoVisible ? 'video-hidden' : ''}`}></div>
@@ -153,7 +172,7 @@ const Header = ({ activeTab, setActiveTab }) => {
       <div className="nav-toolbar-right">
         <button 
           className="nav-circle-btn"
-          onClick={() => setActiveTab('admin')}
+          onClick={() => setActiveTab('admin')}  // admin uses setActiveTab directly (no history reset needed)
           title="ホストログイン"
           style={{ marginLeft: 'auto' }}
         >
