@@ -45,7 +45,22 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
   })
   const [singersRandom] = useState(() => shuffle(singers).slice(0, 10))
 
+  // おすすめの曲: 全曲からランダム20曲
+  const [recommended] = useState(() => shuffle(songs).slice(0, 20))
+
   const { setQueue } = usePlayerStore()
+
+  const playRecommended = (song) => {
+    const c = song.covers?.[0]
+    if (!c) return
+    const singer = data.singers.find(s => s.channelId === c.singerId)
+    setQueue([{
+      id: song.id, videoId: c.videoId, title: song.title,
+      originalArtist: song.originalArtist,
+      singerName: singer?.name || song.singerName || 'Unknown',
+      thumbnailUrl: `https://img.youtube.com/vi/${c.videoId}/hqdefault.jpg`
+    }], 0)
+  }
 
   const playRecentCover = (item) => {
     const singer = data.singers.find(s => s.channelId === item.cover.singerId)
@@ -61,6 +76,49 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
 
   return (
     <div className="home-page" style={{ paddingBottom: '40px', paddingTop: '20px' }}>
+
+      {/* Section 0: おすすめの曲（試作） */}
+      {recommended.length > 0 && (
+        <section style={{ marginBottom: '40px' }}>
+          <h2 style={{ marginBottom: '16px' }}>おすすめの曲</h2>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+            gap: '14px',
+          }}>
+            {recommended.map((song, i) => {
+              const c = song.covers?.[0]
+              if (!c) return null
+              const videoId = c.videoId
+              const singer = data.singers.find(s => s.channelId === c.singerId)
+              const coverCount = songs.filter(s => s.title === song.title).length
+              return (
+                <div key={i} onClick={() => playRecommended(song)} style={{
+                  background: 'var(--surface)', borderRadius: 12, overflow: 'hidden',
+                  cursor: 'pointer', transition: 'transform 0.2s, background 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.background = 'var(--surface-hover)' }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.background = 'var(--surface)' }}
+                >
+                  <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden', position: 'relative' }}>
+                    <img src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.3)' }} />
+                    {coverCount >= 2 && (
+                      <div style={{ position: 'absolute', top: 6, right: 6, background: '#6366f1', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'white' }}>
+                        {coverCount}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ padding: '10px 10px 12px' }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</div>
+                    <div style={{ fontSize: 11, color: '#6366f1', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{song.originalArtist}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{singer?.name || song.singerName || ''}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Section 1: Popular Cover Songs */}
       <section style={{ marginBottom: '40px' }}>
