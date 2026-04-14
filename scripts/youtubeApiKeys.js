@@ -2,16 +2,7 @@ import axios from 'axios'
 
 const keys = [
   process.env.YOUTUBE_API_KEY,
-  process.env.YOUTUBE_API_KEY_1,
-  process.env.YOUTUBE_API_KEY_2,
-  process.env.YOUTUBE_API_KEY_3,
-  process.env.YOUTUBE_API_KEY_4,
-  process.env.YOUTUBE_API_KEY_5,
-  process.env.YOUTUBE_API_KEY_6,
-  process.env.YOUTUBE_API_KEY_7,
-  process.env.YOUTUBE_API_KEY_8,
-  process.env.YOUTUBE_API_KEY_9,
-  process.env.YOUTUBE_API_KEY_10,
+  ...Array.from({ length: 30 }, (_, i) => process.env[`YOUTUBE_API_KEY_${i + 1}`]),
 ].filter(Boolean)
 
 let currentIndex = 0
