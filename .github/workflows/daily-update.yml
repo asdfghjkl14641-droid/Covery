@@ -1,0 +1,59 @@
+name: Daily Data Update
+
+on:
+  schedule:
+    - cron: '0 21 * * *'  # JST 06:00 (UTC 21:00)
+  workflow_dispatch:
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create .env file
+        run: |
+          echo "YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}" >> .env
+          echo "YOUTUBE_API_KEY_1=${{ secrets.YOUTUBE_API_KEY_1 }}" >> .env
+          echo "YOUTUBE_API_KEY_2=${{ secrets.YOUTUBE_API_KEY_2 }}" >> .env
+          echo "YOUTUBE_API_KEY_3=${{ secrets.YOUTUBE_API_KEY_3 }}" >> .env
+          echo "YOUTUBE_API_KEY_4=${{ secrets.YOUTUBE_API_KEY_4 }}" >> .env
+          echo "YOUTUBE_API_KEY_5=${{ secrets.YOUTUBE_API_KEY_5 }}" >> .env
+          echo "YOUTUBE_API_KEY_6=${{ secrets.YOUTUBE_API_KEY_6 }}" >> .env
+          echo "YOUTUBE_API_KEY_7=${{ secrets.YOUTUBE_API_KEY_7 }}" >> .env
+          echo "YOUTUBE_API_KEY_8=${{ secrets.YOUTUBE_API_KEY_8 }}" >> .env
+          echo "YOUTUBE_API_KEY_9=${{ secrets.YOUTUBE_API_KEY_9 }}" >> .env
+          echo "YOUTUBE_API_KEY_10=${{ secrets.YOUTUBE_API_KEY_10 }}" >> .env
+          echo "SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}" >> .env
+          echo "SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}" >> .env
+
+      - name: Check RSS updates (approved channels)
+        run: node scripts/check-rss-updates.js
+        continue-on-error: true
+
+      - name: Fetch cover videos (YouTube)
+        run: node scripts/fetch-data.js
+        continue-on-error: true
+
+      - name: Fetch preview channels
+        run: node scripts/fetch-preview.js
+        continue-on-error: true
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "🔄 Daily auto-update: $(date '+%Y-%m-%d')"
+          git push
