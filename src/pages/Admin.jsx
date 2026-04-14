@@ -5,10 +5,11 @@ import { scanChannel, discoverNewChannels } from "../utils/channelScanner";
 import previewRawOriginal from "../data/previewChannels.json";
 
 // ── Covery Host Admin Panel ──
-const ADMIN_ACCOUNTS = [
-  { email: "sakanouenot14641@icloud.com", password: "Minoru14641Hg" },
-  { email: "asdfghjkl14641@gmail.com", password: "Minoru14641Hg" },
-];
+const ADMIN_CRED = {
+  id1: "sakanouenot14641@icloud.com",
+  id2: "asdfghjkl14641@gmail.com",
+  password: "Minoru14641Hg",
+};
 
 // Storage Polyfill for non-tauri/special environments
 const storage = window.storage || {
@@ -177,7 +178,8 @@ const StatsCard = ({ label, value, color }) => (
 
 export default function Admin() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [email, setEmail] = useState("");
+  const [id1, setId1] = useState("");
+  const [id2, setId2] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
@@ -235,9 +237,9 @@ export default function Admin() {
   }, [pendingCount, autoReplenish, isLoggedIn]);
 
   const handleLogin = () => {
-    const match = ADMIN_ACCOUNTS.find(a => a.email === email.trim() && a.password === password);
-    if (match) { setIsLoggedIn(true); setError(""); }
-    else setError("メールアドレスまたはパスワードが違います");
+    if (id1.trim() === ADMIN_CRED.id1 && id2.trim() === ADMIN_CRED.id2 && password === ADMIN_CRED.password) {
+      setIsLoggedIn(true); setError("");
+    } else setError("ID またはパスワードが違います");
   };
   const getStatus = (id) => decisions[id] || "pending";
 
@@ -289,8 +291,10 @@ export default function Admin() {
           <div style={{ fontSize: "13px", color: "#94a3b8", marginTop: "8px", letterSpacing: "3px", textTransform: "uppercase" }}>Host Panel</div>
         </div>
         <form onSubmit={e => { e.preventDefault(); handleLogin(); }} autoComplete="on">
-          <label style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "6px", display: "block" }}>メールアドレス</label>
-          <input type="email" name="email" autoComplete="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} placeholder="メールアドレスを入力" style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(99,102,241,0.2)", background: "rgba(10,14,39,0.8)", color: "#f1f5f9", fontSize: "15px", outline: "none", marginBottom: "16px" }} />
+          <label style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "6px", display: "block" }}>ID 1</label>
+          <input type="email" name="email" autoComplete="email" value={id1} onChange={e => { setId1(e.target.value); setError(""); }} placeholder="ID 1 を入力" style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(99,102,241,0.2)", background: "rgba(10,14,39,0.8)", color: "#f1f5f9", fontSize: "15px", outline: "none", marginBottom: "16px" }} />
+          <label style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "6px", display: "block" }}>ID 2</label>
+          <input type="email" name="email2" autoComplete="email" value={id2} onChange={e => { setId2(e.target.value); setError(""); }} placeholder="ID 2 を入力" style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(99,102,241,0.2)", background: "rgba(10,14,39,0.8)", color: "#f1f5f9", fontSize: "15px", outline: "none", marginBottom: "16px" }} />
           <label style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "6px", display: "block" }}>パスワード</label>
           <input type="password" name="password" autoComplete="current-password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} placeholder="パスワードを入力" style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(99,102,241,0.2)", background: "rgba(10,14,39,0.8)", color: "#f1f5f9", fontSize: "15px", outline: "none", marginBottom: "6px" }} />
           {error && <div style={{ color: "#ef4444", fontSize: "13px", marginBottom: "8px", marginTop: "8px" }}>{error}</div>}
