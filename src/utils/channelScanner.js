@@ -8,12 +8,35 @@ const EXCLUDE_KEYWORDS = [
   '歌枠', 'ゲーム', '雑談', '踊ってみた', 'off vocal', 'offvocal', 'instrumental', 'inst'
 ]
 
-// Build title lookup from catalog
-const catalogTitles = new Map()
+// Build catalog entries for matching (sorted by title length descending)
+const catalogEntries = []
 for (const artist of catalogData.artists) {
   for (const song of artist.songs) {
-    catalogTitles.set(song.title.toLowerCase(), { title: song.title, artist: artist.name })
+    catalogEntries.push({ title: song.title, artist: artist.name })
   }
+}
+catalogEntries.sort((a, b) => b.title.length - a.title.length)
+
+// Strict matching: split video title by separators, check exact part match
+const SEPS = /[\/／\-ー\s【】（）\[\]\(\)「」『』｜|×x・,、。~～!！?？♪♫]+/
+function _normalize(t) { return (t||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,s=>String.fromCharCode(s.charCodeAt(0)-0xFEE0)).toLowerCase().trim() }
+function strictMatch(videoTitle, songTitle, artistName) {
+  const nv = _normalize(videoTitle), ns = _normalize(songTitle)
+  if (!ns) return false
+  const parts = nv.split(SEPS).filter(p => p)
+  if (!parts.some(p => p === ns)) return false
+  if (ns.length <= 3) {
+    const na = _normalize(artistName)
+    if (!nv.includes(na) && !nv.includes(na.split(' ')[0])) return false
+  }
+  return true
+}
+
+function findCatalogMatch(videoTitle) {
+  for (const e of catalogEntries) {
+    if (strictMatch(videoTitle, e.title, e.artist)) return e
+  }
+  return null
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
@@ -46,16 +69,10 @@ export async function scanChannel(channelId, channelName, onProgress = () => {})
 
       const videoId = item.id.videoId
 
-      // Match to catalog
-      let matchedTitle = title
-      let matchedArtist = '不明'
-      for (const [key, val] of catalogTitles) {
-        if (lower.includes(key)) {
-          matchedTitle = val.title
-          matchedArtist = val.artist
-          break
-        }
-      }
+      // Match to catalog (strict)
+      const match = findCatalogMatch(title)
+      const matchedTitle = match ? match.title : title
+      const matchedArtist = match ? match.artist : '不明'
 
       covers.push({
         videoId,

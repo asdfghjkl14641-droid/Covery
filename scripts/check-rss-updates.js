@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { findBestMatch } from './matchSong.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -48,11 +49,11 @@ async function checkRssUpdates() {
   const lastCheckDate = new Date(lastCheckData.lastCheck)
   console.log(`前回チェック: ${lastCheckData.lastCheck}`)
 
-  // Build catalog title lookup
-  const catalogTitles = new Map()
+  // Build catalog entries for matching
+  const catalogEntries = []
   for (const artist of catalog.artists) {
     for (const song of artist.songs) {
-      catalogTitles.set(song.title.toLowerCase(), { title: song.title, artist: artist.name })
+      catalogEntries.push({ title: song.title, artist: artist.name })
     }
   }
 
@@ -117,16 +118,10 @@ async function checkRssUpdates() {
         if (entry.includes('/shorts/')) continue
         if (!['歌ってみた', 'cover', 'カバー'].some(k => lower.includes(k))) continue
 
-        // Match to catalog
-        let matchedTitle = title
-        let matchedArtist = '不明'
-        for (const [key, val] of catalogTitles) {
-          if (lower.includes(key)) {
-            matchedTitle = val.title
-            matchedArtist = val.artist
-            break
-          }
-        }
+        // Match to catalog (strict)
+        const match = findBestMatch(title, catalogEntries)
+        const matchedTitle = match ? match.title : title
+        const matchedArtist = match ? match.artist : '不明'
 
         const channelName = extractTag(entry, 'name')[0] || singersMap.get(channelId)?.name || 'Unknown'
 
