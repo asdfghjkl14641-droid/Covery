@@ -188,7 +188,6 @@ export default function Admin() {
   const [expandedId, setExpandedId] = useState(null);
   const [miniPlayer, setMiniPlayer] = useState(null);
   const [scanError, setScanError] = useState(null);
-  const [channels, setChannels] = useState(() => PREVIEW_CHANNELS);
   const replenishingRef = useRef(false);
 
   const decisions = useAdminStore(s => s.decisions);
@@ -204,13 +203,21 @@ export default function Admin() {
   const setAutoReplenish = useAdminStore(s => s.setAutoReplenish);
   const replenishProgress = useAdminStore(s => s.replenishProgress);
   const setReplenishProgress = useAdminStore(s => s.setReplenishProgress);
+  const channels = useAdminStore(s => s.previewChannels) || [];
+  const initChannels = useAdminStore(s => s.initChannels);
+  const addChannels = useAdminStore(s => s.addChannels);
+  const getKnownChannelIds = useAdminStore(s => s.getKnownChannelIds);
+
+  // Initialize channels from JSON file if localStorage is empty
+  useEffect(() => {
+    if (!channels.length) initChannels(PREVIEW_CHANNELS);
+  }, []);
 
   const save = useCallback((d) => saveDecisions(d), [saveDecisions]);
 
-  // Count pending
   const pendingCount = useMemo(() => channels.filter(ch => !decisions[ch.channelId] || decisions[ch.channelId] === 'pending').length, [channels, decisions]);
 
-  // Auto-replenish when pending drops below 200
+  // Auto-replenish
   const TARGET_PENDING = 200;
   useEffect(() => {
     if (!autoReplenish || !isLoggedIn || pendingCount >= TARGET_PENDING || replenishingRef.current) return;
@@ -218,15 +225,11 @@ export default function Admin() {
     if (needed <= 0) return;
 
     replenishingRef.current = true;
-    const knownIds = new Set(channels.map(c => c.channelId));
-    // Also skip decided channels
-    Object.keys(decisions).forEach(id => knownIds.add(id));
+    const knownIds = getKnownChannelIds();
 
     discoverNewChannels(needed, knownIds, (p) => setReplenishProgress(p))
       .then(newChs => {
-        if (newChs.length > 0) {
-          setChannels(prev => [...prev, ...newChs]);
-        }
+        if (newChs.length > 0) addChannels(newChs);
         setReplenishProgress(null);
         replenishingRef.current = false;
       })

@@ -3,6 +3,7 @@ import { create } from 'zustand'
 const DECISIONS_KEY = 'covery-channel-decisions'
 const DEVMODE_KEY = 'covery-dev-mode'
 const SCAN_RESULTS_KEY = 'covery-scan-results'
+const CHANNELS_KEY = 'covery-preview-channels'
 
 function loadJSON(key, fallback) {
   try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback } catch { return fallback }
@@ -24,9 +25,12 @@ export const useAdminStore = create((set, get) => ({
   approvedIds: buildApprovedIds(initDec),
   devMode: localStorage.getItem(DEVMODE_KEY) !== 'false',
 
-  // Scan state (in-memory only — progress resets on reload, results persist)
-  scanProgress: {},   // { channelId: { found, filtered, current } }
-  scanResults: loadJSON(SCAN_RESULTS_KEY, {}), // { channelId: { covers, scannedAt } }
+  // Preview channels — persisted in localStorage
+  previewChannels: loadJSON(CHANNELS_KEY, null), // null = not yet initialized
+
+  // Scan state
+  scanProgress: {},
+  scanResults: loadJSON(SCAN_RESULTS_KEY, {}),
 
   reload: () => {
     const d = loadJSON(DECISIONS_KEY, {})
@@ -38,10 +42,34 @@ export const useAdminStore = create((set, get) => ({
     set({ devMode: val })
   },
 
-  // Save decisions to localStorage + rebuild approvedIds
   saveDecisions: (d) => {
     saveJSON(DECISIONS_KEY, d)
     set({ decisions: d, approvedIds: buildApprovedIds(d) })
+  },
+
+  // ── Preview channels management ──
+  initChannels: (channels) => {
+    // Only set if not already in localStorage
+    if (get().previewChannels) return
+    saveJSON(CHANNELS_KEY, channels)
+    set({ previewChannels: channels })
+  },
+
+  addChannels: (newChannels) => {
+    const existing = get().previewChannels || []
+    const existingIds = new Set(existing.map(c => c.channelId))
+    const unique = newChannels.filter(c => !existingIds.has(c.channelId))
+    if (unique.length === 0) return
+    const updated = [...existing, ...unique]
+    saveJSON(CHANNELS_KEY, updated)
+    set({ previewChannels: updated })
+  },
+
+  getKnownChannelIds: () => {
+    const chs = get().previewChannels || []
+    const ids = new Set(chs.map(c => c.channelId))
+    Object.keys(get().decisions).forEach(id => ids.add(id))
+    return ids
   },
 
   // Scan lifecycle
@@ -56,10 +84,8 @@ export const useAdminStore = create((set, get) => ({
   },
 
   completeScan: (channelId, results) => {
-    // Save results
     const sr = { ...get().scanResults, [channelId]: { covers: results.covers, scannedAt: new Date().toISOString() } }
     saveJSON(SCAN_RESULTS_KEY, sr)
-    // Set status to approved
     const d = { ...get().decisions, [channelId]: 'approved' }
     saveJSON(DECISIONS_KEY, d)
     const { [channelId]: _, ...restProgress } = get().scanProgress
@@ -73,9 +99,9 @@ export const useAdminStore = create((set, get) => ({
     set({ decisions: d, approvedIds: buildApprovedIds(d), scanProgress: restProgress })
   },
 
-  // Auto-replenish state
+  // Auto-replenish state (in-memory only)
   autoReplenish: true,
-  replenishProgress: null, // { found, target, current } or null
+  replenishProgress: null,
   setAutoReplenish: (val) => set({ autoReplenish: val }),
   setReplenishProgress: (p) => set({ replenishProgress: p }),
 }))
