@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { usePlayerStore, setMainPlayer, setPreloadPlayer, getMainPlayer } from '../store/usePlayerStore'
 import { useAdminStore } from '../store/useAdminStore'
+import { getApprovedSongs } from '../utils/filterCovers'
 import metaData from '../data/metadata.json'
 
 export const useYouTubeAPI = () => {
@@ -134,13 +135,12 @@ export const useYouTubeAPI = () => {
       setTimeout(() => { try { main.playVideo() } catch (_) {} }, 500)
     }
 
-    // Build same-song cover list (approved only, or all in devMode)
-    const { approvedIds, devMode } = useAdminStore.getState()
-    const sameSongs = (metaData?.songs || []).filter(s => s.title === currentTrack.title)
+    // Build same-song cover list from approved data
+    const approvedSongs = getApprovedSongs()
+    const sameSongs = approvedSongs.filter(s => s.title === currentTrack.title)
     const covers = sameSongs.map(s => {
       const c = s.covers?.[0]
       if (!c) return null
-      if (!devMode && approvedIds.size > 0 && !approvedIds.has(c.singerId)) return null
       const singer = (metaData?.singers || []).find(si => si.channelId === c.singerId)
       return {
         videoId: c.videoId,

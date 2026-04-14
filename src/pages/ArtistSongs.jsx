@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { ArrowLeft, Play, Music, Radio } from 'lucide-react'
 import { usePlayerStore } from '../store/usePlayerStore'
 import { useAdminStore } from '../store/useAdminStore'
-import { filterSongs } from '../utils/filterCovers'
+import { getApprovedSongs } from '../utils/filterCovers'
 import data from '../data/metadata.json'
 import catalog from '../data/songCatalog.json'
 import SongCard from '../components/Shared/SongCard'
@@ -11,10 +11,11 @@ const ArtistSongs = ({ artistName, onBack, onNavigateToCovers, onNavigateToSinge
   const { setQueue, startBGMMode } = usePlayerStore()
   const approvedIds = useAdminStore(s => s.approvedIds)
   const devMode = useAdminStore(s => s.devMode)
+  const scanResults = useAdminStore(s => s.scanResults)
 
   const songs = useMemo(() =>
-    filterSongs((data?.songs || []).filter(s => s.originalArtist === artistName), approvedIds, devMode)
-  , [artistName, approvedIds, devMode])
+    getApprovedSongs().filter(s => s.originalArtist === artistName)
+  , [artistName, approvedIds, devMode, scanResults])
 
   // Deduplicate by title (multiple covers of same song exist)
   const uniqueSongs = []

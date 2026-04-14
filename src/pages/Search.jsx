@@ -4,7 +4,7 @@ import data from '../data/metadata.json'
 import catalog from '../data/songCatalog.json'
 import SongCard from '../components/Shared/SongCard'
 import { useAdminStore } from '../store/useAdminStore'
-import { filterSongs } from '../utils/filterCovers'
+import { getApprovedSongs } from '../utils/filterCovers'
 
 // 50-on grouping — matched against reading (hiragana)
 const KANA_GROUPS = [
@@ -106,7 +106,9 @@ const Search = ({ onNavigateToCovers, onNavigateToArtist, onNavigateToSinger }) 
   // Song search results (filtered by admin approvals)
   const approvedIds = useAdminStore(s => s.approvedIds)
   const devMode = useAdminStore(s => s.devMode)
-  const filteredSongs = filterSongs(data.songs, approvedIds, devMode).filter(song =>
+  const scanResults = useAdminStore(s => s.scanResults)
+  const allApproved = useMemo(() => getApprovedSongs(), [approvedIds, devMode, scanResults])
+  const filteredSongs = allApproved.filter(song =>
     song.title.toLowerCase().includes(query.toLowerCase()) ||
     song.originalArtist.toLowerCase().includes(query.toLowerCase()) ||
     song.singerName?.toLowerCase().includes(query.toLowerCase())

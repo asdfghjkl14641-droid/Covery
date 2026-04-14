@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { Play, Clock, Users } from 'lucide-react'
 import { usePlayerStore } from '../store/usePlayerStore'
 import { useAdminStore } from '../store/useAdminStore'
-import { filterSongs, filterSingers } from '../utils/filterCovers'
+import { getApprovedSongs, getApprovedSingers } from '../utils/filterCovers'
 import data from '../data/metadata.json'
 
 function shuffle(arr) {
@@ -17,8 +17,9 @@ function shuffle(arr) {
 const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
   const approvedIds = useAdminStore(s => s.approvedIds)
   const devMode = useAdminStore(s => s.devMode)
-  const songs = useMemo(() => filterSongs(data.songs, approvedIds, devMode), [approvedIds, devMode])
-  const singers = useMemo(() => filterSingers(data.singers, approvedIds, devMode), [approvedIds, devMode])
+  const scanResults = useAdminStore(s => s.scanResults)
+  const songs = useMemo(() => getApprovedSongs(), [approvedIds, devMode, scanResults])
+  const singers = useMemo(() => getApprovedSingers(), [approvedIds, devMode])
 
   // Build cover song groups from filtered data
   const allCoverSongs = useMemo(() => {

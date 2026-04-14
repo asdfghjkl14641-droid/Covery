@@ -2,18 +2,18 @@ import React, { useState, useMemo } from 'react'
 import { ArrowLeft, Play, Shuffle, Clock, ArrowUpDown, Dice5 } from 'lucide-react'
 import { usePlayerStore } from '../store/usePlayerStore'
 import { useAdminStore } from '../store/useAdminStore'
-import { filterSongs } from '../utils/filterCovers'
-import data from '../data/metadata.json'
+import { getApprovedSongs } from '../utils/filterCovers'
 
 const SongCovers = ({ songTitle, onBack, onNavigateToSinger }) => {
   const { setQueue, currentTrack, isPlaying } = usePlayerStore()
   const approvedIds = useAdminStore(s => s.approvedIds)
   const devMode = useAdminStore(s => s.devMode)
+  const scanResults = useAdminStore(s => s.scanResults)
   const [sortMode, setSortMode] = useState('random')
 
   const covers = useMemo(() => {
-    return filterSongs((data?.songs || []).filter(s => s.title === songTitle), approvedIds, devMode)
-  }, [songTitle, approvedIds, devMode])
+    return getApprovedSongs().filter(s => s.title === songTitle)
+  }, [songTitle, approvedIds, devMode, scanResults])
 
   const firstSong = covers[0] || {}
   const heroVideoId = covers[0]?.covers?.[0]?.videoId
