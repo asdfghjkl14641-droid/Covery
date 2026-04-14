@@ -31,7 +31,8 @@
       "Read(//c/Users/Sakan/AppData/Local/Programs//**)",
       "Read(//c/Users/Sakan/AppData/Local/**)",
       "Bash(powershell.exe -Command \"Get-Command gh -ErrorAction SilentlyContinue | Select-Object Source\")",
-      "Bash(node scripts/check-rss-updates.js)"
+      "Bash(node scripts/check-rss-updates.js)",
+      "Bash(node scripts/cleanup-shorts.js)"
     ]
   }
 }

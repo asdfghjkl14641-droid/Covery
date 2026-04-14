@@ -112,8 +112,9 @@ async function checkRssUpdates() {
         const title = extractTag(entry, 'title')[0] || ''
         const lower = title.toLowerCase()
 
-        // Filter
+        // Filter (including shorts URL detection)
         if (EXCLUDE_KEYWORDS.some(k => lower.includes(k.toLowerCase()))) continue
+        if (entry.includes('/shorts/')) continue
         if (!['歌ってみた', 'cover', 'カバー'].some(k => lower.includes(k))) continue
 
         // Match to catalog
