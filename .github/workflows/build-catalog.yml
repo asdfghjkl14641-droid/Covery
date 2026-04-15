@@ -1,0 +1,80 @@
+# ══════════════════════════════════════════════════════════
+#  Build Song Catalog (manual trigger)
+# ══════════════════════════════════════════════════════════
+# 手動でAction実行ボタンを押すと、GitHub Actionsのランナー上で
+# scripts/build-catalog.js が走り:
+#   1. Spotify API でアーティストとトップトラックを取得
+#   2. Deezer API で人気度を取得
+#   3. src/data/songCatalog.json にバックアップ保存
+#   4. Cloudflare D1 の artists / songs テーブルに INSERT OR IGNORE
+#   5. 変更を自動コミット・プッシュ
+#
+# ┌──────────────────────────────────────────────────────┐
+# │  Cloudflare API トークンの取得方法 (初回セットアップ) │
+# └──────────────────────────────────────────────────────┘
+#   1. https://dash.cloudflare.com/profile/api-tokens にアクセス
+#   2. 「Create Token」ボタンをクリック
+#   3. 「Edit Cloudflare Workers」テンプレートを選択
+#   4. Account Resources: 自分のアカウント (All accounts でも可)
+#   5. Zone Resources: All zones
+#   6. 「Continue to summary」→ 「Create Token」
+#   7. 表示されたトークンをコピー (一度しか表示されないので注意)
+#   8. GitHubのリポジトリ Settings → Secrets and variables → Actions
+#   9. 「New repository secret」で以下2つを追加:
+#      - Name: CLOUDFLARE_API_TOKEN    Value: (6でコピーしたトークン)
+#      - Name: CLOUDFLARE_ACCOUNT_ID   Value: (ダッシュボード右サイドバーのAccount ID)
+#  10. SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET も同様に追加
+#      (既存 daily-update.yml 用にセット済みの場合はスキップ可)
+#  11. PAT_TOKEN (push権限付き fine-grained personal access token) も追加
+#      - Contents: Read and write
+#      - Workflows: Read and write
+# ══════════════════════════════════════════════════════════
+
+name: Build Song Catalog
+
+on:
+  workflow_dispatch:  # 手動実行のみ (Actions タブから "Run workflow" ボタン)
+
+jobs:
+  build-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 最大6時間 (大量取得のため)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install wrangler
+        run: npm install -g wrangler
+
+      - name: Create .env file
+        run: |
+          echo "SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}" > .env
+          echo "SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}" >> .env
+          echo "YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}" >> .env
+
+      - name: Run build-catalog.js
+        run: node scripts/build-catalog.js
+        env:
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "🎵 カタログ更新: $(date '+%Y-%m-%d %H:%M')"
+          git push
