@@ -35,7 +35,8 @@
       "Bash(node scripts/cleanup-shorts.js)",
       "Bash(node scripts/rematch-covers.js)",
       "Bash(node scripts/cleanup-duration.js)",
-      "Bash(node --trace-warnings scripts/cleanup-duration.js)"
+      "Bash(node --trace-warnings scripts/cleanup-duration.js)",
+      "Bash(node scripts/migrate.js)"
     ]
   }
 }

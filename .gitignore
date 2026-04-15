@@ -29,3 +29,7 @@ dist-ssr
 
 # Backup files
 *.backup.json
+
+# Generated migration SQL
+worker/scripts/migration.sql
+worker/.wrangler/
