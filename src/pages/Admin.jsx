@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import AdminChannelDetail, { StatusBadge } from "./AdminChannelDetail";
 import { useAdminStore } from "../store/useAdminStore";
 import { scanChannel, discoverNewChannels } from "../utils/channelScanner";
-import previewRawOriginal from "../data/previewChannels.json";
 import * as api from "../api/client";
 
 const TOKEN_KEY = "covery-admin-token";
@@ -29,45 +28,20 @@ const storage = window.storage || {
 
 // Load channels from previewChannels.json (static import, always exists)
 import previewRaw from "../data/previewChannels.json";
-import metaRaw from "../data/metadata.json";
 
 function buildChannelList() {
-  // Build singer thumbnail lookup from metadata
-  const singerThumbMap = new Map();
-  for (const s of (metaRaw.singers || [])) {
-    if (s.thumbnailUrl) singerThumbMap.set(s.channelId, s.thumbnailUrl);
-  }
-
   const preview = previewRaw?.channels || [];
-  if (preview.length > 0) {
-    return preview.map(ch => ({
-      channelId: ch.channelId,
-      channelName: ch.channelName,
-      thumbnailUrl: ch.thumbnailUrl || singerThumbMap.get(ch.channelId) || "",
-      coverCount: ch.totalFound || ch.sampleCovers?.length || 0,
-      subscriberCount: ch.subscriberCount || 0,
-      sampleCovers: (ch.sampleCovers || []).map(sc => ({
-        title: sc.title, videoId: sc.videoId,
-        originalArtist: sc.originalArtist || "", publishedAt: sc.publishedAt || "",
-      })),
-    }));
-  }
-  // Fallback: build from metadata.json
-  const singerMap = new Map();
-  for (const song of (metaRaw.songs || [])) {
-    for (const c of (song.covers || [])) {
-      if (!singerMap.has(c.singerId)) {
-        const singer = (metaRaw.singers || []).find(s => s.channelId === c.singerId);
-        singerMap.set(c.singerId, { channelId: c.singerId, channelName: singer?.name || c.singerId, thumbnailUrl: singer?.thumbnailUrl || "", coverCount: 0, sampleCovers: [] });
-      }
-      const entry = singerMap.get(c.singerId);
-      entry.coverCount++;
-      if (entry.sampleCovers.length < 3) {
-        entry.sampleCovers.push({ title: song.title, videoId: c.videoId, originalArtist: song.originalArtist || "", publishedAt: c.publishedAt || "" });
-      }
-    }
-  }
-  return [...singerMap.values()].sort((a, b) => b.coverCount - a.coverCount);
+  return preview.map(ch => ({
+    channelId: ch.channelId,
+    channelName: ch.channelName,
+    thumbnailUrl: ch.thumbnailUrl || "",
+    coverCount: ch.totalFound || ch.sampleCovers?.length || 0,
+    subscriberCount: ch.subscriberCount || 0,
+    sampleCovers: (ch.sampleCovers || []).map(sc => ({
+      title: sc.title, videoId: sc.videoId,
+      originalArtist: sc.originalArtist || "", publishedAt: sc.publishedAt || "",
+    })),
+  }));
 }
 
 const PREVIEW_CHANNELS = buildChannelList();

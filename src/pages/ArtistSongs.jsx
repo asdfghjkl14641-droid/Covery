@@ -1,75 +1,63 @@
-import React, { useMemo, useState, useEffect } from 'react'
-import { ArrowLeft, Play, Music, Radio } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { ArrowLeft, Play, Radio } from 'lucide-react'
 import { usePlayerStore } from '../store/usePlayerStore'
-import { useAdminStore } from '../store/useAdminStore'
-import { getApprovedSongs } from '../utils/filterCovers'
-import { fetchArtistSongs } from '../api/client'
-import data from '../data/metadata.json'
-import catalog from '../data/songCatalog.json'
+import { fetchArtistSongs, fetchSongCovers } from '../api/client'
 import SongCard from '../components/Shared/SongCard'
 
 const ArtistSongs = ({ artistName, artistId, onBack, onNavigateToCovers, onNavigateToSinger }) => {
   const { setQueue, startBGMMode } = usePlayerStore()
-  const approvedIds = useAdminStore(s => s.approvedIds)
-  const devMode = useAdminStore(s => s.devMode)
-  const scanResults = useAdminStore(s => s.scanResults)
-  const [apiData, setApiData] = useState(null)
+  const [apiSongs, setApiSongs] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!artistId) return
+    if (!artistId) { setLoading(false); return }
+    let cancelled = false
     fetchArtistSongs(artistId).then(res => {
-      if (res?.songs?.length) {
-        console.log(`[Covery] API: ${res.songs.length} songs for artist ${artistId}`)
-        setApiData(res)
-      }
+      if (cancelled) return
+      const songs = (res?.songs || []).map(s => ({
+        id: s.id, title: s.title, originalArtist: s.artistName || artistName,
+        coverCount: s.coverCount || 0, covers: [],
+      }))
+      console.log(`[Covery] API: ${songs.length} songs for artist ${artistId}`)
+      setApiSongs(songs)
+      setLoading(false)
     })
+    return () => { cancelled = true }
   }, [artistId])
 
-  // Songs with covers: prefer JSON (has videoIds) but supplement with API
-  const songs = useMemo(() =>
-    getApprovedSongs().filter(s => s.originalArtist === artistName)
-  , [artistName, approvedIds, devMode, scanResults])
-
-  // Deduplicate by title (multiple covers of same song exist)
-  const uniqueSongs = []
-  const seenTitles = new Set()
-  for (const song of songs) {
-    if (!seenTitles.has(song.title)) {
-      seenTitles.add(song.title)
-      uniqueSongs.push(song)
+  const handlePlayAll = async () => {
+    const tracks = []
+    for (const s of apiSongs.slice(0, 20)) {
+      try {
+        const res = await fetchSongCovers(s.id)
+        const c = res?.covers?.[0]
+        if (c) tracks.push({
+          id: `api_${c.videoId}`, videoId: c.videoId,
+          title: s.title, originalArtist: s.originalArtist,
+          singerName: c.channelName || 'Unknown',
+          thumbnailUrl: c.thumbnailUrl || `https://img.youtube.com/vi/${c.videoId}/hqdefault.jpg`,
+        })
+      } catch (_) {}
     }
+    if (tracks.length > 0) setQueue(tracks, 0)
   }
 
-  // Also get songs from catalog that aren't in metadata yet
-  const catalogArtist = catalog.artists.find(a => a.name === artistName)
-  const catalogOnlySongs = []
-  if (catalogArtist) {
-    for (const cs of catalogArtist.songs) {
-      if (!seenTitles.has(cs.title)) {
-        seenTitles.add(cs.title)
-        catalogOnlySongs.push(cs)
-      }
+  const handleBGM = async () => {
+    const tracks = []
+    for (const s of apiSongs) {
+      try {
+        const res = await fetchSongCovers(s.id)
+        const covers = res?.covers || []
+        const pick = covers[Math.floor(Math.random() * covers.length)]
+        if (pick) tracks.push({
+          id: `api_${pick.videoId}`, videoId: pick.videoId,
+          title: s.title, originalArtist: s.originalArtist,
+          singerName: pick.channelName || 'Unknown',
+          thumbnailUrl: pick.thumbnailUrl || `https://img.youtube.com/vi/${pick.videoId}/hqdefault.jpg`,
+        })
+      } catch (_) {}
     }
-  }
-
-  // Avatar from Spotify
-  const spotifyImage = catalogArtist?.imageUrl || ''
-
-  const handlePlayAll = () => {
-    const queue = uniqueSongs.map(s => {
-      const c = s.covers?.[0]
-      if (!c) return null
-      const sig = (data?.singers || []).find(si => si.channelId === c.singerId)
-      return {
-        id: s.id,
-        videoId: c.videoId,
-        title: s.title,
-        originalArtist: s.originalArtist,
-        singerName: sig?.name || c.singerId || 'Unknown',
-        thumbnailUrl: `https://img.youtube.com/vi/${c.videoId}/hqdefault.jpg`
-      }
-    }).filter(Boolean)
-    if (queue.length > 0) setQueue(queue, 0)
+    if (tracks.length > 0) startBGMMode(artistName, tracks)
   }
 
   return (
@@ -86,128 +74,71 @@ const ArtistSongs = ({ artistName, artistId, onBack, onNavigateToCovers, onNavig
         >
           <ArrowLeft size={24} />
         </button>
-        <ArtistAvatar src={spotifyImage} name={artistName} size={56} />
+        <ArtistAvatar name={artistName} size={56} />
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: 800, margin: 0 }}>{artistName}</h1>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-            {uniqueSongs.length + catalogOnlySongs.length}曲
+            {apiSongs.length}曲
           </p>
         </div>
       </div>
 
+      {!loading && apiSongs.length === 0 && (
+        <p style={{ color: '#94a3b8', textAlign: 'center', marginTop: 60, fontSize: 16 }}>
+          コンテンツを準備中です
+        </p>
+      )}
+
       {/* Actions */}
-      {uniqueSongs.length > 0 && (
+      {apiSongs.length > 0 && (
         <div style={{ display: 'flex', gap: 12, marginBottom: '28px', flexWrap: 'wrap' }}>
-          <button
-            onClick={handlePlayAll}
-            style={{
-              background: 'var(--primary)', color: 'white', border: 'none',
-              borderRadius: 24, padding: '12px 24px', fontSize: 14, fontWeight: 'bold',
-              display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer'
-            }}
-          >
+          <button onClick={handlePlayAll} style={{
+            background: 'var(--primary)', color: 'white', border: 'none',
+            borderRadius: 24, padding: '12px 24px', fontSize: 14, fontWeight: 'bold',
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer'
+          }}>
             <Play size={18} fill="white" />
             全て再生
           </button>
-          <button
-            onClick={() => {
-              const tracks = uniqueSongs.map(s => {
-                // Pick a random cover for each song
-                const covers = data.songs.filter(ds => ds.title === s.title)
-                const pick = covers[Math.floor(Math.random() * covers.length)]
-                const c = pick?.covers?.[0]
-                if (!c) return null
-                const sig = (data?.singers || []).find(si => si.channelId === c.singerId)
-                return {
-                  id: pick.id, videoId: c.videoId, title: pick.title,
-                  originalArtist: pick.originalArtist,
-                  singerName: sig?.name || c.singerId || 'Unknown',
-                  thumbnailUrl: `https://img.youtube.com/vi/${c.videoId}/hqdefault.jpg`
-                }
-              }).filter(Boolean)
-              if (tracks.length > 0) startBGMMode(artistName, tracks)
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.08)', color: 'white',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 24, padding: '12px 24px', fontSize: 14, fontWeight: 'bold',
-              display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer'
-            }}
-          >
+          <button onClick={handleBGM} style={{
+            background: 'rgba(255,255,255,0.08)', color: 'white',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 24, padding: '12px 24px', fontSize: 14, fontWeight: 'bold',
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer'
+          }}>
             <Radio size={18} />
             BGMモード
           </button>
         </div>
       )}
 
-      {/* Songs with covers (playable) */}
-      {uniqueSongs.length > 0 && (
+      {apiSongs.length > 0 && (
         <>
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--text-secondary)' }}>
-            カバー動画あり ({uniqueSongs.length})
+            カバー動画あり ({apiSongs.length})
           </h2>
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-            gap: '20px',
-            marginBottom: '32px'
+            gap: '20px', marginBottom: '32px'
           }}>
-            {uniqueSongs.map(song => (
+            {apiSongs.map(song => (
               <SongCard
                 key={song.id}
                 song={song}
-                contextSongs={uniqueSongs}
-                onNavigateToCovers={onNavigateToCovers}
+                contextSongs={apiSongs}
+                onNavigateToCovers={(title) => onNavigateToCovers?.(title, song.id)}
                 onNavigateToSinger={onNavigateToSinger}
               />
             ))}
           </div>
         </>
       )}
-
-      {/* Songs from catalog only (no covers yet) */}
-      {catalogOnlySongs.length > 0 && (
-        <>
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--text-secondary)' }}>
-            その他の曲 ({catalogOnlySongs.length})
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {catalogOnlySongs.map((song, i) => (
-              <div key={`cat-${i}`} style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: '10px 12px', borderRadius: 10,
-                background: 'var(--surface)', opacity: 0.6
-              }}>
-                <Music size={18} color="var(--text-secondary)" />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{song.title}</div>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>カバー未収集</div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {uniqueSongs.length === 0 && catalogOnlySongs.length === 0 && (
-        <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: 60 }}>
-          楽曲データがありません。
-        </p>
-      )}
     </div>
   )
 }
 
-const ArtistAvatar = ({ src, name, size = 56 }) => {
-  const [error, setError] = React.useState(false)
-  if (src && !error) {
-    return (
-      <img
-        src={src} alt={name} onError={() => setError(true)}
-        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-      />
-    )
-  }
+const ArtistAvatar = ({ name, size = 56 }) => {
   const ch = (name || '?').charAt(0).toUpperCase()
   const hue = (name || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360
   return (

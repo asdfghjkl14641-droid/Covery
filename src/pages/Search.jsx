@@ -1,10 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react'
 import { Search as SearchIcon, X, ChevronRight } from 'lucide-react'
-import data from '../data/metadata.json'
-import catalog from '../data/songCatalog.json'
 import SongCard from '../components/Shared/SongCard'
-import { useAdminStore } from '../store/useAdminStore'
-import { getApprovedSongs } from '../utils/filterCovers'
+import { fetchArtists, searchAll } from '../api/client'
 
 // 50-on grouping — matched against reading (hiragana)
 const KANA_GROUPS = [
@@ -47,36 +44,34 @@ function getSectionLabel(key) {
 const Search = ({ onNavigateToCovers, onNavigateToArtist, onNavigateToSinger }) => {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(null)
-  const [apiArtists, setApiArtists] = useState(null)
+  const [apiArtists, setApiArtists] = useState([])
+  const [searchResults, setSearchResults] = useState({ songs: [], singers: [] })
   const sectionRefs = useRef({})
 
-  // Fetch artists from API (with JSON fallback)
+  // Fetch artists from API (API-only; no JSON fallback)
   useEffect(() => {
-    import('../api/client').then(async ({ fetchArtists }) => {
-      const res = await fetchArtists()
-      if (res?.artists?.length) {
-        console.log(`[Covery] API: ${res.artists.length} artists loaded`)
-        // Cross-reference catalog for imageUrl
-        const merged = res.artists.map(a => {
-          const catEntry = catalog.artists.find(c => c.name === a.name)
-          return { name: a.name, id: a.id, reading: a.reading || a.name, imageUrl: catEntry?.imageUrl || '', songCount: a.songCount }
-        })
-        setApiArtists(merged)
-      }
+    fetchArtists().then(res => {
+      const arr = res?.artists || []
+      console.log(`[Covery] API: ${arr.length} artists loaded`)
+      setApiArtists(arr.map(a => ({
+        name: a.name, id: a.id, reading: a.reading || a.name,
+        imageUrl: '', songCount: a.songCount,
+      })))
     })
   }, [])
 
-  // Artist list: prefer API, fallback to JSON catalog
-  const artists = useMemo(() => {
-    if (apiArtists) return apiArtists
-    return catalog.artists.map(a => ({
-      name: a.name,
-      id: null,
-      reading: a.reading || a.name,
-      imageUrl: a.imageUrl || '',
-      songCount: a.songs.length,
-    }))
-  }, [apiArtists])
+  // Search via API when query changes
+  useEffect(() => {
+    if (!query) { setSearchResults({ songs: [], singers: [] }); return }
+    const h = setTimeout(() => {
+      searchAll(query).then(res => {
+        setSearchResults({ songs: res?.songs || [], singers: res?.singers || [] })
+      })
+    }, 250)
+    return () => clearTimeout(h)
+  }, [query])
+
+  const artists = apiArtists
 
   // Filter by query
   const filteredArtists = useMemo(() => {
@@ -122,16 +117,13 @@ const Search = ({ onNavigateToCovers, onNavigateToArtist, onNavigateToSinger }) 
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  // Song search results (filtered by admin approvals)
-  const approvedIds = useAdminStore(s => s.approvedIds)
-  const devMode = useAdminStore(s => s.devMode)
-  const scanResults = useAdminStore(s => s.scanResults)
-  const allApproved = useMemo(() => getApprovedSongs(), [approvedIds, devMode, scanResults])
-  const filteredSongs = allApproved.filter(song =>
-    song.title.toLowerCase().includes(query.toLowerCase()) ||
-    song.originalArtist.toLowerCase().includes(query.toLowerCase()) ||
-    song.singerName?.toLowerCase().includes(query.toLowerCase())
-  )
+  // Song search results (API-only)
+  const filteredSongs = useMemo(() =>
+    (searchResults.songs || []).map(s => ({
+      id: s.id, title: s.title, originalArtist: s.artistName,
+      coverCount: s.coverCount || 0, covers: [],
+    }))
+  , [searchResults])
 
   const ArtistAvatar = ({ name, imageUrl }) => {
     const [error, setError] = useState(false)

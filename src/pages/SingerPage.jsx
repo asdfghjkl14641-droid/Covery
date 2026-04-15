@@ -1,114 +1,65 @@
 import React, { useMemo, useState, useEffect } from 'react'
-import { ArrowLeft, Play, Shuffle, Users, Ban } from 'lucide-react'
+import { ArrowLeft, Play, Shuffle } from 'lucide-react'
 import { usePlayerStore } from '../store/usePlayerStore'
-import { useAdminStore } from '../store/useAdminStore'
 import { fetchChannelCovers, fetchSimilarSingers } from '../api/client'
-import data from '../data/metadata.json'
 
 const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }) => {
   const { setQueue } = usePlayerStore()
-  const approvedIds = useAdminStore(s => s.approvedIds)
-  const devMode = useAdminStore(s => s.devMode)
-  const isHidden = !devMode && approvedIds.size > 0 && !approvedIds.has(singerId)
 
   const [apiCovers, setApiCovers] = useState(null)
-  const [apiSimilar, setApiSimilar] = useState(null)
+  const [apiSimilar, setApiSimilar] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!singerId || isHidden) return
+    if (!singerId) { setLoading(false); return }
+    let cancelled = false
     fetchChannelCovers(singerId).then(res => {
-      if (res?.covers?.length) {
+      if (cancelled) return
+      if (res?.covers) {
         console.log(`[Covery] API: ${res.covers.length} covers for channel ${singerId}`)
         setApiCovers(res)
       }
+      setLoading(false)
     })
     fetchSimilarSingers(singerId).then(res => {
+      if (cancelled) return
       if (res?.similar) {
         console.log(`[Covery] API: ${res.similar.length} similar singers`)
         setApiSimilar(res.similar)
       }
     })
-  }, [singerId, isHidden])
+    return () => { cancelled = true }
+  }, [singerId])
 
   const singer = apiCovers?.channel
     ? { channelId: apiCovers.channel.channelId, name: apiCovers.channel.channelName, thumbnailUrl: apiCovers.channel.thumbnailUrl }
-    : (data?.singers || []).find(s => s.channelId === singerId)
+    : null
   const singerName = singer?.name || 'Unknown'
 
-  if (isHidden) {
-    return (
-      <div style={{ color: 'white', animation: 'fadeIn 0.4s ease-out', textAlign: 'center', paddingTop: 80 }}>
-        <button onClick={onBack} style={{ position: 'absolute', top: 24, left: 24, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer' }}>
-          <ArrowLeft size={24} />
-        </button>
-        <Ban size={48} color="var(--text-secondary)" style={{ marginBottom: 16 }} />
-        <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>このチャンネルは現在非表示です</p>
-      </div>
-    )
-  }
-
-  // All songs this singer covers — prefer API
   const songs = useMemo(() => {
-    if (apiCovers?.covers?.length) {
-      return apiCovers.covers.map(c => ({
-        id: `api_${c.videoId}`,
-        title: c.songTitle,
-        originalArtist: c.artistName,
-        singerName,
-        covers: [{
-          videoId: c.videoId, singerId,
-          publishedAt: c.publishedAt || '',
-          thumbnailUrl: `https://img.youtube.com/vi/${c.videoId}/hqdefault.jpg`,
-        }],
-      }))
-    }
-    return (data?.songs || []).filter(s => s.covers.some(c => c.singerId === singerId))
-  }, [singerId, apiCovers, singerName])
+    if (!apiCovers?.covers?.length) return []
+    return apiCovers.covers.map(c => ({
+      id: `api_${c.videoId}`,
+      title: c.songTitle,
+      originalArtist: c.artistName,
+      singerName,
+      covers: [{
+        videoId: c.videoId, singerId,
+        publishedAt: c.publishedAt || '',
+        thumbnailUrl: `https://img.youtube.com/vi/${c.videoId}/hqdefault.jpg`,
+      }],
+    }))
+  }, [apiCovers, singerName, singerId])
 
-  // "似た歌い手" — prefer API (Jaccard done server-side), fallback to local calc
-  const similarSingers = useMemo(() => {
-    if (apiSimilar) {
-      return apiSimilar.map(s => ({
-        channelId: s.channelId, name: s.channelName, thumb: s.thumbnailUrl,
-        jaccard: s.jaccard / 100, overlapCount: s.overlapCount,
-      }))
-    }
-    // Local Jaccard fallback
-    const myTitles = new Set(songs.map(s => s.title))
-    const myCount = myTitles.size
-    const otherTitles = new Map()
-    const otherInfo = new Map()
-
-    for (const song of data.songs) {
-      for (const c of song.covers) {
-        if (c.singerId === singerId) continue
-        if (!devMode && approvedIds.size > 0 && !approvedIds.has(c.singerId)) continue
-        if (!otherTitles.has(c.singerId)) {
-          otherTitles.set(c.singerId, new Set())
-          const s = data.singers.find(si => si.channelId === c.singerId)
-          otherInfo.set(c.singerId, { name: s?.name || 'Unknown', thumb: s?.thumbnailUrl || '' })
-        }
-        otherTitles.get(c.singerId).add(song.title)
-      }
-    }
-
-    const results = []
-    for (const [cid, titles] of otherTitles) {
-      let overlapCount = 0
-      for (const t of titles) { if (myTitles.has(t)) overlapCount++ }
-      if (overlapCount === 0) continue
-      const union = myCount + titles.size - overlapCount
-      const jaccard = union > 0 ? overlapCount / union : 0
-      if (jaccard < 0.1) continue
-      const info = otherInfo.get(cid)
-      results.push({ channelId: cid, name: info.name, thumb: info.thumb, jaccard, overlapCount })
-    }
-
-    return results.sort((a, b) => b.jaccard - a.jaccard).slice(0, 10)
-  }, [apiSimilar, singerId, songs, devMode, approvedIds])
+  const similarSingers = useMemo(() =>
+    apiSimilar.map(s => ({
+      channelId: s.channelId, name: s.channelName, thumb: s.thumbnailUrl,
+      jaccard: s.jaccard / 100, overlapCount: s.overlapCount,
+    }))
+  , [apiSimilar])
 
   const buildTrack = (song) => {
-    const cover = song.covers.find(c => c.singerId === singerId) || song.covers[0]
+    const cover = song.covers[0]
     if (!cover) return null
     return {
       id: song.id, videoId: cover.videoId, title: song.title,
@@ -128,6 +79,17 @@ const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }
     if (queue.length > 0) setQueue(queue, 0)
   }
 
+  if (!loading && songs.length === 0) {
+    return (
+      <div style={{ color: 'white', padding: '40px 20px' }}>
+        <button onClick={onBack} style={backBtnStyle}><ArrowLeft size={24} /></button>
+        <p style={{ color: '#94a3b8', textAlign: 'center', fontSize: 16, marginTop: 60 }}>
+          コンテンツを準備中です
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div style={{ color: 'white', animation: 'fadeIn 0.4s ease-out' }}>
       {/* Header */}
@@ -144,7 +106,6 @@ const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }
         </div>
       </div>
 
-      {/* Actions */}
       {songs.length > 0 && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 28 }}>
           <button onClick={handleShuffleAll} style={{ ...actionBtnStyle, background: 'var(--primary)' }}>
@@ -153,15 +114,13 @@ const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }
         </div>
       )}
 
-      {/* Song list */}
       <div style={{ marginBottom: 40 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: 12 }}>
           この歌い手のカバー曲 ({songs.length})
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {songs.map((song, index) => {
-            const cover = song.covers.find(c => c.singerId === singerId) || song.covers[0]
-            if (!cover) return null
+            const cover = song.covers[0]
             return (
               <div
                 key={`${song.id}-${index}`}
@@ -198,7 +157,6 @@ const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }
         </div>
       </div>
 
-      {/* Similar singers */}
       {similarSingers.length > 0 && (
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: 12 }}>
@@ -228,12 +186,6 @@ const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }
             ))}
           </div>
         </div>
-      )}
-
-      {songs.length === 0 && (
-        <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: 60 }}>
-          カバー動画が見つかりませんでした。
-        </p>
       )}
 
       <style>{`

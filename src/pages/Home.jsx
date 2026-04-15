@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Play, Clock, Users } from 'lucide-react'
-import { usePlayerStore } from '../store/usePlayerStore'
-import { useAdminStore } from '../store/useAdminStore'
-import { getApprovedSongs, getApprovedSingers } from '../utils/filterCovers'
-import { fetchSongs as apiFetchSongs, fetchSingers as apiFetchSingers } from '../api/client'
-import data from '../data/metadata.json'
+import {
+  fetchSongs as apiFetchSongs,
+  fetchSingers as apiFetchSingers,
+  fetchSongCovers as apiFetchSongCovers,
+} from '../api/client'
 
 function shuffle(arr) {
   const a = [...arr]
@@ -16,125 +16,57 @@ function shuffle(arr) {
 }
 
 const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
-  const approvedIds = useAdminStore(s => s.approvedIds)
-  const devMode = useAdminStore(s => s.devMode)
-  const scanResults = useAdminStore(s => s.scanResults)
-  const coverDecisions = useAdminStore(s => s.coverDecisions)
-  const songs = useMemo(() => getApprovedSongs(), [approvedIds, devMode, scanResults, coverDecisions])
-  const singers = useMemo(() => getApprovedSingers(), [approvedIds, devMode])
-
-  // ── API data ──
-  const [apiSongs, setApiSongs] = useState(null)
-  const [apiSingers, setApiSingers] = useState(null)
+  const [songs, setSongs] = useState([])         // [{id, title, artistName, coverCount}]
+  const [songSamples, setSongSamples] = useState({}) // { songId: { videoId, channelName, publishedAt, thumbnailUrl } }
+  const [singers, setSingers] = useState([])     // [{channelId, channelName, thumbnailUrl}]
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false
+    ;(async () => {
       const [songsRes, singersRes] = await Promise.all([
         apiFetchSongs(40, true),
         apiFetchSingers(10),
       ])
-      if (songsRes?.songs?.length) {
-        console.log(`[Covery] API: ${songsRes.songs.length} songs loaded`)
-        setApiSongs(songsRes.songs)
-      }
-      if (singersRes?.singers?.length) {
-        console.log(`[Covery] API: ${singersRes.singers.length} singers loaded`)
-        setApiSingers(singersRes.singers)
+      if (cancelled) return
+      const songList = songsRes?.songs || []
+      const singerList = singersRes?.singers || []
+      setSongs(songList)
+      setSingers(singerList)
+
+      // Fetch sample cover for each song (for thumbnails)
+      if (songList.length > 0) {
+        const samples = {}
+        const picks = songList.slice(0, 30)
+        await Promise.all(picks.map(async s => {
+          try {
+            const r = await apiFetchSongCovers(s.id)
+            const first = r?.covers?.[0]
+            if (first) samples[s.id] = {
+              videoId: first.videoId,
+              channelName: first.channelName,
+              channelId: first.channelId,
+              publishedAt: first.publishedAt || '',
+              thumbnailUrl: first.thumbnailUrl || `https://img.youtube.com/vi/${first.videoId}/hqdefault.jpg`,
+            }
+          } catch (_) {}
+        }))
+        if (!cancelled) setSongSamples(samples)
       }
       setLoading(false)
     })()
+    return () => { cancelled = true }
   }, [])
 
-  // Build cover song groups from filtered data
-  const allCoverSongs = useMemo(() => {
-    const map = new Map()
-    for (const song of songs) {
-      const key = `${song.title}|||${song.originalArtist}`
-      if (!map.has(key)) map.set(key, { title: song.title, originalArtist: song.originalArtist, covers: [], firstVideoId: song.covers?.[0]?.videoId })
-      const entry = map.get(key)
-      for (const c of (song.covers || [])) entry.covers.push({ ...c, songId: song.id, singerName: song.singerName })
-    }
-    return [...map.values()].filter(e => e.covers.length >= 2)
-  }, [songs])
-
-  const [popularRandom] = useState(() => shuffle(allCoverSongs).slice(0, 10))
-  const [pickups] = useState(() => shuffle(allCoverSongs.filter(e => e.covers.length >= 3)).slice(0, 3))
-  const [recentRandom] = useState(() => {
-    const all = []
-    for (const song of songs) {
-      for (const c of (song.covers || [])) all.push({ ...song, cover: c })
-    }
-    all.sort((a, b) => (b.cover.publishedAt || '').localeCompare(a.cover.publishedAt || ''))
-    return shuffle(all.slice(0, 30)).slice(0, 10)
-  })
-  const [singersRandomLocal] = useState(() => shuffle(singers).slice(0, 10))
-
-  // おすすめの曲: JSON-based fallback
-  const [recommendedLocal] = useState(() => shuffle(songs).slice(0, 20))
-
-  // API優先、失敗時はJSONフォールバック
-  const singersRandom = useMemo(() => {
-    if (apiSingers && apiSingers.length > 0) {
-      return apiSingers.map(s => ({
-        channelId: s.channelId,
-        name: s.channelName,
-        thumbnailUrl: s.thumbnailUrl,
-      }))
-    }
-    return singersRandomLocal
-  }, [apiSingers, singersRandomLocal])
-
-  // おすすめの曲: API曲リストをJSON曲にマッチングしてvideoId付きで返す
-  const recommended = useMemo(() => {
-    if (!apiSongs || apiSongs.length === 0) return recommendedLocal
-    const matched = []
-    for (const apiSong of apiSongs) {
-      const jsonSong = songs.find(s =>
-        s.title === apiSong.title && s.originalArtist === apiSong.artistName
-      )
-      if (jsonSong) matched.push(jsonSong)
-      if (matched.length >= 20) break
-    }
-    return matched.length > 0 ? matched : recommendedLocal
-  }, [apiSongs, songs, recommendedLocal])
-
-  const { setQueue } = usePlayerStore()
-
-  const playRecommended = (song) => {
-    const c = song.covers?.[0]
-    if (!c) return
-    const singer = data.singers.find(s => s.channelId === c.singerId)
-    setQueue([{
-      id: song.id, videoId: c.videoId, title: song.title,
-      originalArtist: song.originalArtist,
-      singerName: singer?.name || song.singerName || 'Unknown',
-      thumbnailUrl: `https://img.youtube.com/vi/${c.videoId}/hqdefault.jpg`
-    }], 0)
-  }
-
-  const playRecentCover = (item) => {
-    const singer = data.singers.find(s => s.channelId === item.cover.singerId)
-    setQueue([{
-      id: item.id,
-      videoId: item.cover.videoId,
-      title: item.title,
-      originalArtist: item.originalArtist,
-      singerName: singer?.name || item.singerName || 'Unknown',
-      thumbnailUrl: `https://img.youtube.com/vi/${item.cover.videoId}/hqdefault.jpg`
-    }], 0)
-  }
-
-  // Empty-state check: no local songs AND (loading complete AND no API songs)
-  const hasAnyContent = songs.length > 0 || (apiSongs && apiSongs.length > 0) || (apiSingers && apiSingers.length > 0)
-  if (!loading && !hasAnyContent) {
+  // Empty state: API returned nothing
+  if (!loading && songs.length === 0 && singers.length === 0) {
     return (
-      <div className="home-page" style={{ padding: '80px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+      <div className="home-page" style={{ padding: '80px 20px', textAlign: 'center' }}>
         <div style={{ fontSize: 40, marginBottom: 16 }}>🎵</div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
           コンテンツを準備中です
         </h2>
-        <p style={{ fontSize: 14, lineHeight: 1.7 }}>
+        <p style={{ fontSize: 16, lineHeight: 1.7, color: '#94a3b8' }}>
           まだ承認された歌い手がいません。<br />
           しばらくお待ちください。
         </p>
@@ -142,10 +74,16 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
     )
   }
 
+  // Derived lists — only from API data
+  const songsWithSamples = songs.filter(s => songSamples[s.id])
+  const popularRandom = shuffle(songsWithSamples).slice(0, 10)
+  const pickups = shuffle(songsWithSamples.filter(s => (s.coverCount || 0) >= 3)).slice(0, 3)
+  const recentRandom = shuffle(songsWithSamples).slice(0, 10)
+  const recommended = songsWithSamples.slice(0, 20)
+
   return (
     <div className="home-page" style={{ paddingBottom: '40px', paddingTop: '20px' }}>
-
-      {/* Section 0: おすすめの曲（試作） */}
+      {/* Section 0: おすすめの曲 */}
       {loading && recommended.length === 0 && (
         <section style={{ marginBottom: '40px' }}>
           <h2 style={{ marginBottom: '16px' }}>おすすめの曲</h2>
@@ -166,37 +104,30 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
       {recommended.length > 0 && (
         <section style={{ marginBottom: '40px' }}>
           <h2 style={{ marginBottom: '16px' }}>おすすめの曲</h2>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-            gap: '14px',
-          }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
             {recommended.map((song, i) => {
-              const c = song.covers?.[0]
-              if (!c) return null
-              const videoId = c.videoId
-              const singer = data.singers.find(s => s.channelId === c.singerId)
-              const coverCount = songs.filter(s => s.title === song.title).length
+              const sample = songSamples[song.id]
+              if (!sample) return null
               return (
-                <div key={i} onClick={() => playRecommended(song)} style={{
-                  background: 'var(--surface)', borderRadius: 12, overflow: 'hidden',
-                  cursor: 'pointer', transition: 'transform 0.2s, background 0.2s',
+                <div key={i} onClick={() => onNavigateToCovers(song.title, song.id)} style={{
+                  background: 'var(--surface)', borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+                  transition: 'transform 0.2s, background 0.2s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.background = 'var(--surface-hover)' }}
-                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.background = 'var(--surface)' }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.background = 'var(--surface-hover)' }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.background = 'var(--surface)' }}
                 >
                   <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden', position: 'relative' }}>
-                    <img src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.3)' }} />
-                    {coverCount >= 2 && (
+                    <img src={sample.thumbnailUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.3)' }} />
+                    {(song.coverCount || 0) >= 2 && (
                       <div style={{ position: 'absolute', top: 6, right: 6, background: '#6366f1', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'white' }}>
-                        {coverCount}
+                        {song.coverCount}
                       </div>
                     )}
                   </div>
                   <div style={{ padding: '10px 10px 12px' }}>
                     <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</div>
-                    <div style={{ fontSize: 11, color: '#6366f1', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{song.originalArtist}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{singer?.name || song.singerName || ''}</div>
+                    <div style={{ fontSize: 11, color: '#6366f1', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{song.artistName}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sample.channelName || ''}</div>
                   </div>
                 </div>
               )
@@ -206,56 +137,62 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
       )}
 
       {/* Section 1: Popular Cover Songs */}
-      <section style={{ marginBottom: '40px' }}>
-        <h2 style={{ marginBottom: '16px' }}>人気のカバー曲</h2>
-        <div style={scrollRow} className="no-scrollbar">
-          {popularRandom.map((entry, i) => (
-            <CoverSongCard key={i} entry={entry} onClick={() => onNavigateToCovers(entry.title)} />
-          ))}
-        </div>
-      </section>
+      {popularRandom.length > 0 && (
+        <section style={{ marginBottom: '40px' }}>
+          <h2 style={{ marginBottom: '16px' }}>人気のカバー曲</h2>
+          <div style={scrollRow} className="no-scrollbar">
+            {popularRandom.map((song, i) => (
+              <CoverSongCard key={i} song={song} sample={songSamples[song.id]} onClick={() => onNavigateToCovers(song.title, song.id)} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Section 2: Pickup feature cards */}
       {pickups.length > 0 && (
         <section style={{ marginBottom: '40px' }}>
           <h2 style={{ marginBottom: '16px' }}>聴き比べピックアップ</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {pickups.map((entry, i) => (
-              <PickupCard key={i} entry={entry} onClick={() => onNavigateToCovers(entry.title)} />
+            {pickups.map((song, i) => (
+              <PickupCard key={i} song={song} sample={songSamples[song.id]} onClick={() => onNavigateToCovers(song.title, song.id)} />
             ))}
           </div>
         </section>
       )}
 
       {/* Section 3: Recent covers */}
-      <section style={{ marginBottom: '40px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-          <Clock size={18} color="var(--text-secondary)" />
-          <h2>新着カバー</h2>
-        </div>
-        <div style={scrollRow} className="no-scrollbar">
-          {recentRandom.map((item, i) => (
-            <RecentCoverCard key={i} item={item} onClick={() => playRecentCover(item)} />
-          ))}
-        </div>
-      </section>
+      {recentRandom.length > 0 && (
+        <section style={{ marginBottom: '40px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <Clock size={18} color="var(--text-secondary)" />
+            <h2>新着カバー</h2>
+          </div>
+          <div style={scrollRow} className="no-scrollbar">
+            {recentRandom.map((song, i) => (
+              <RecentCoverCard key={i} song={song} sample={songSamples[song.id]} onClick={() => onNavigateToCovers(song.title, song.id)} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* Section 4: Popular singers (preserved) */}
-      <section>
-        <h2 style={{ marginBottom: '16px' }}>人気の歌い手</h2>
-        <div style={scrollRow} className="no-scrollbar">
-          {singersRandom.map(singer => (
-            <div
-              key={singer.channelId}
-              onClick={() => onNavigateToSinger && onNavigateToSinger(singer.channelId)}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', minWidth: '100px', cursor: 'pointer' }}
-            >
-              <Avatar src={singer.thumbnailUrl} name={singer.name} />
-              <span style={{ fontSize: '13px', textAlign: 'center', fontWeight: '500', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{singer.name}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Section 4: Popular singers */}
+      {singers.length > 0 && (
+        <section>
+          <h2 style={{ marginBottom: '16px' }}>人気の歌い手</h2>
+          <div style={scrollRow} className="no-scrollbar">
+            {singers.map(s => (
+              <div
+                key={s.channelId}
+                onClick={() => onNavigateToSinger && onNavigateToSinger(s.channelId)}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', minWidth: '100px', cursor: 'pointer' }}
+              >
+                <Avatar src={s.thumbnailUrl} name={s.channelName} />
+                <span style={{ fontSize: '13px', textAlign: 'center', fontWeight: '500', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.channelName}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -266,150 +203,103 @@ const scrollRow = {
   margin: '0 -20px', padding: '0 20px 16px'
 }
 
-// ── Cover Song Card (Section 1) ──
-const CoverSongCard = ({ entry, onClick }) => {
-  const videoId = entry.firstVideoId
-  return (
-    <div onClick={onClick} style={{
-      minWidth: 180, width: 180, cursor: 'pointer', flexShrink: 0,
-      background: 'var(--surface)', borderRadius: 12, overflow: 'hidden',
-      transition: 'transform 0.2s, background 0.2s',
-    }}
+const CoverSongCard = ({ song, sample, onClick }) => (
+  <div onClick={onClick} style={{
+    minWidth: 180, width: 180, cursor: 'pointer', flexShrink: 0,
+    background: 'var(--surface)', borderRadius: 12, overflow: 'hidden',
+    transition: 'transform 0.2s, background 0.2s',
+  }}
     onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.background = 'var(--surface-hover)' }}
     onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.background = 'var(--surface)' }}
-    >
-      <div style={{ width: '100%', height: 120, overflow: 'hidden', position: 'relative' }}>
-        {videoId ? (
-          <img src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.3)' }} />
-        ) : (
-          <div style={{ width: '100%', height: '100%', background: 'var(--surface-hover)' }} />
-        )}
-        <div style={{
-          position: 'absolute', bottom: 8, right: 8,
-          background: '#6366f1', borderRadius: 20, padding: '3px 10px',
-          fontSize: 11, fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: 4,
-        }}>
-          <Users size={11} />
-          {entry.covers.length}人
-        </div>
-      </div>
-      <div style={{ padding: '10px 12px' }}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {entry.title}
-        </div>
-        <div style={{ fontSize: 12, color: '#6366f1', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {entry.originalArtist}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Pickup Card (Section 2) ──
-const PickupCard = ({ entry, onClick }) => {
-  const videoId = entry.firstVideoId
-  // Get up to 3 singer icons
-  const singerIcons = entry.covers.slice(0, 3).map(c => {
-    const singer = data.singers.find(s => s.channelId === c.singerId)
-    return { name: singer?.name || '?', thumb: singer?.thumbnailUrl }
-  })
-
-  return (
-    <div onClick={onClick} style={{
-      width: '100%', height: 180, borderRadius: 16, overflow: 'hidden',
-      position: 'relative', cursor: 'pointer',
-    }}>
-      {/* Background */}
-      {videoId && (
-        <img src={`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`} alt=""
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(8px) brightness(0.4)', transform: 'scale(1.1)' }}
-          onError={e => { e.target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` }}
-        />
+  >
+    <div style={{ width: '100%', height: 120, overflow: 'hidden', position: 'relative' }}>
+      {sample?.videoId ? (
+        <img src={sample.thumbnailUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.3)' }} />
+      ) : (
+        <div style={{ width: '100%', height: '100%', background: 'var(--surface-hover)' }} />
       )}
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(10,14,39,0.8))' }} />
+      <div style={{
+        position: 'absolute', bottom: 8, right: 8,
+        background: '#6366f1', borderRadius: 20, padding: '3px 10px',
+        fontSize: 11, fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: 4,
+      }}>
+        <Users size={11} />
+        {song.coverCount || 0}人
+      </div>
+    </div>
+    <div style={{ padding: '10px 12px' }}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</div>
+      <div style={{ fontSize: 12, color: '#6366f1', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.artistName}</div>
+    </div>
+  </div>
+)
 
-      {/* Content */}
-      <div style={{ position: 'relative', zIndex: 1, padding: '24px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{entry.title}</div>
-          <div style={{ fontSize: 14, color: '#a5b4fc', fontWeight: 600 }}>{entry.originalArtist}</div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ display: 'flex' }}>
-              {singerIcons.map((s, i) => (
-                <SingerMiniAvatar key={i} src={s.thumb} name={s.name} offset={i} />
-              ))}
-            </div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>
-              {entry.covers.length}人の歌い手が挑戦
-            </span>
-          </div>
-          <div style={{
-            background: 'rgba(255,255,255,0.15)', borderRadius: '50%',
-            width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <Play size={20} fill="white" />
-          </div>
+const PickupCard = ({ song, sample, onClick }) => (
+  <div onClick={onClick} style={{
+    width: '100%', height: 180, borderRadius: 16, overflow: 'hidden',
+    position: 'relative', cursor: 'pointer',
+  }}>
+    {sample?.videoId && (
+      <img src={`https://img.youtube.com/vi/${sample.videoId}/maxresdefault.jpg`} alt=""
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(8px) brightness(0.4)', transform: 'scale(1.1)' }}
+        onError={e => { e.target.src = sample.thumbnailUrl }}
+      />
+    )}
+    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(10,14,39,0.8))' }} />
+    <div style={{ position: 'relative', zIndex: 1, padding: '24px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+      <div>
+        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{song.title}</div>
+        <div style={{ fontSize: 14, color: '#a5b4fc', fontWeight: 600 }}>{song.artistName}</div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>
+          {song.coverCount || 0}人の歌い手が挑戦
+        </span>
+        <div style={{
+          background: 'rgba(255,255,255,0.15)', borderRadius: '50%',
+          width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(10px)'
+        }}>
+          <Play size={20} fill="white" />
         </div>
       </div>
     </div>
-  )
-}
+  </div>
+)
 
-const SingerMiniAvatar = ({ src, name, offset }) => {
-  const [err, setErr] = React.useState(false)
-  const style = {
-    width: 28, height: 28, borderRadius: '50%', border: '2px solid rgba(10,14,39,0.8)',
-    marginLeft: offset > 0 ? -8 : 0, objectFit: 'cover', zIndex: 3 - offset,
-    position: 'relative',
-  }
-  if (!src || err) {
-    return <div style={{ ...style, background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{name.charAt(0)}</div>
-  }
-  return <img src={src} alt="" onError={() => setErr(true)} style={style} />
-}
-
-// ── Recent Cover Card (Section 3) ──
-const RecentCoverCard = ({ item, onClick }) => {
-  const singer = data.singers.find(s => s.channelId === item.cover.singerId)
-  const videoId = item.cover.videoId
-  return (
-    <div onClick={onClick} style={{
-      minWidth: 170, width: 170, cursor: 'pointer', flexShrink: 0,
-      background: 'var(--surface)', borderRadius: 12, overflow: 'hidden',
-      transition: 'transform 0.2s',
-    }}
+const RecentCoverCard = ({ song, sample, onClick }) => (
+  <div onClick={onClick} style={{
+    minWidth: 170, width: 170, cursor: 'pointer', flexShrink: 0,
+    background: 'var(--surface)', borderRadius: 12, overflow: 'hidden',
+    transition: 'transform 0.2s',
+  }}
     onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
     onMouseLeave={e => e.currentTarget.style.transform = ''}
-    >
-      <div style={{ width: '100%', height: 110, overflow: 'hidden' }}>
-        <img src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} alt=""
+  >
+    <div style={{ width: '100%', height: 110, overflow: 'hidden' }}>
+      {sample?.videoId && (
+        <img src={sample.thumbnailUrl} alt=""
           style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.3)' }} />
+      )}
+    </div>
+    <div style={{ padding: '10px 12px' }}>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
+        {sample?.channelName || ''}
       </div>
-      <div style={{ padding: '10px 12px' }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {item.title}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
-          {singer?.name || item.singerName || 'Unknown'}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', opacity: 0.6 }}>
-          {item.cover.publishedAt || ''}
-        </div>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', opacity: 0.6 }}>
+        {sample?.publishedAt || ''}
       </div>
     </div>
-  )
-}
+  </div>
+)
 
-// ── Singer Avatar (preserved) ──
 const Avatar = ({ src, name }) => {
   const [error, setError] = React.useState(false)
   if (!src || error) {
     return (
       <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--primary)', color: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 'bold' }}>
-        {name.charAt(0)}
+        {(name || '?').charAt(0)}
       </div>
     )
   }

@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { Heart, ListMusic, Plus, Trash2, Play } from 'lucide-react'
 import { useCollectionStore } from '../store/useCollectionStore'
 import { usePlayerStore } from '../store/usePlayerStore'
-import data from '../data/metadata.json'
 import SongCard from '../components/Shared/SongCard'
 
 const Library = ({ onNavigateToCovers, onNavigateToSinger }) => {
@@ -10,7 +9,8 @@ const Library = ({ onNavigateToCovers, onNavigateToSinger }) => {
   const { favorites, playlists, createPlaylist, deletePlaylist } = useCollectionStore()
   const [newPlaylistName, setNewPlaylistName] = useState('')
 
-  const favoriteSongs = data.songs.filter(s => favorites.includes(s.id))
+  // Favorites display is API-only; without an API hydrate endpoint yet, render as empty.
+  const favoriteSongs = []
 
   const handleCreatePlaylist = (e) => {
     e.preventDefault()

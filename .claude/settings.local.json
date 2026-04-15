@@ -50,7 +50,8 @@
       "Bash(node -c scripts/fetch-data.js)",
       "Bash(node -c scripts/fetch-preview.js)",
       "Bash(node -c scripts/check-rss-updates.js)",
-      "Bash(grep -l \"status\\\\|approved\" worker/scripts/*.js)"
+      "Bash(grep -l \"status\\\\|approved\" worker/scripts/*.js)",
+      "Bash(git commit --allow-empty -m ':*)"
     ]
   }
 }
