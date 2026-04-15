@@ -220,6 +220,25 @@ export default function Admin() {
     if (!channels.length) initChannels(PREVIEW_CHANNELS);
   }, []);
 
+  // Auto-fetch token if already logged in but token missing (pre-token-feature sessions)
+  useEffect(() => {
+    if (!isLoggedIn || token) return;
+    (async () => {
+      try {
+        const res = await api.adminLogin(ADMIN_CRED.password);
+        if (res?.token) {
+          setToken(res.token);
+          localStorage.setItem(TOKEN_KEY, res.token);
+          console.log('[Covery] Auto-refreshed admin token');
+        } else {
+          console.warn('[Covery] Auto-token fetch returned no token:', res);
+        }
+      } catch (e) {
+        console.warn('[Covery] Auto-token fetch failed:', e.message);
+      }
+    })();
+  }, [isLoggedIn, token]);
+
   // One-time migration: sync localStorage decisions to D1
   useEffect(() => {
     if (!token || !isLoggedIn) return;
