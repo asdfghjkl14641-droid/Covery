@@ -13,6 +13,10 @@ const ADMIN_CRED = {
   id2: "asdfghjkl14641@gmail.com",
   password: "Minoru14641Hg",
 };
+// Password used for backend API auth (Worker-side secret). Separate from the
+// UI gate password above — the local UI stays behind Minoru14641Hg, while the
+// API accepts covery2026 as configured in wrangler env.
+const API_PASSWORD = "covery2026";
 
 // Storage Polyfill for non-tauri/special environments
 const storage = window.storage || {
@@ -225,7 +229,7 @@ export default function Admin() {
     if (!isLoggedIn || token) return;
     (async () => {
       try {
-        const res = await api.adminLogin(ADMIN_CRED.password);
+        const res = await api.adminLogin(API_PASSWORD);
         if (res?.token) {
           setToken(res.token);
           localStorage.setItem(TOKEN_KEY, res.token);
@@ -330,7 +334,7 @@ export default function Admin() {
     }
     // Also fetch API token (optional — local login works even if API is down)
     try {
-      const res = await api.adminLogin(password);
+      const res = await api.adminLogin(API_PASSWORD);
       if (res?.token) {
         setToken(res.token);
         localStorage.setItem(TOKEN_KEY, res.token);

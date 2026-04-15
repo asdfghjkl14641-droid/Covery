@@ -45,7 +45,7 @@ export async function handleAdminChannels(request, env) {
 
     const { results } = await env.DB.prepare(`
       SELECT ch.id, ch.channel_id, ch.channel_name, ch.channel_url, ch.thumbnail_url,
-        ch.subscriber_count, ch.status, ch.created_at, ch.updated_at,
+        ch.subscriber_count, ch.status, ch.created_at,
         (SELECT COUNT(*) FROM covers c WHERE c.channel_id = ch.id) AS cover_count
       FROM channels ch
       ${where}
@@ -69,7 +69,7 @@ export async function handleAdminChannels(request, env) {
         id: r.id, channelId: r.channel_id, channelName: r.channel_name,
         channelUrl: r.channel_url, thumbnailUrl: r.thumbnail_url,
         subscriberCount: r.subscriber_count, status: r.status,
-        coverCount: r.cover_count, createdAt: r.created_at, updatedAt: r.updated_at,
+        coverCount: r.cover_count, createdAt: r.created_at,
       })),
       total: stats.total,
       stats,
@@ -103,7 +103,7 @@ export async function handleAdminChannelCovers(request, env, ytChannelId) {
 
 async function setChannelStatus(env, ytChannelId, status) {
   const result = await env.DB.prepare(
-    `UPDATE channels SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE channel_id = ?`
+    `UPDATE channels SET status = ? WHERE channel_id = ?`
   ).bind(status, ytChannelId).run()
   return result.meta?.changes > 0
 }
