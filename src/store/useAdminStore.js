@@ -88,7 +88,14 @@ export const useAdminStore = create((set, get) => ({
   },
 
   completeScan: (channelId, results) => {
-    const sr = { ...get().scanResults, [channelId]: { covers: results.covers, scannedAt: new Date().toISOString() } }
+    const sr = { ...get().scanResults, [channelId]: {
+      covers: results.covers,
+      scannedAt: new Date().toISOString(),
+      catalogMatched: results.catalogMatched || 0,
+      spotifyAdded: results.spotifyAdded || 0,
+      unmatchedSkipped: results.unmatchedSkipped || 0,
+      skippedVideos: results.skippedVideos || [],
+    } }
     saveJSON(SCAN_RESULTS_KEY, sr)
     const d = { ...get().decisions, [channelId]: 'approved' }
     saveJSON(DECISIONS_KEY, d)

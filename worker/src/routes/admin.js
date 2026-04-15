@@ -198,8 +198,17 @@ export async function handleSpotifySearch(request, env) {
     const body = await request.json()
     const query = (body?.query || '').trim()
     if (!query) return errorResponse('query required', 400)
+    // Optional: market=JP (default) or market=none for global search
+    const market = body?.market === 'none' ? null : (body?.market || 'JP')
+    const limit = Math.min(parseInt(body?.limit || 10, 10) || 10, 20)
     const token = await getSpotifyToken(env)
-    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&market=JP&limit=5`
+    const params = [
+      `q=${encodeURIComponent(query)}`,
+      `type=track`,
+      `limit=${limit}`,
+    ]
+    if (market) params.push(`market=${market}`)
+    const url = `https://api.spotify.com/v1/search?${params.join('&')}`
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
     if (!res.ok) return errorResponse(`Spotify search failed: ${res.status}`, res.status)
     const data = await res.json()

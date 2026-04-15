@@ -15,9 +15,10 @@ export const StatusBadge = ({ status }) => {
   );
 };
 
-export default function AdminChannelDetail({ channel, status, scanProgress, onApprove, onReject, onReset, onBack }) {
+export default function AdminChannelDetail({ channel, status, scanProgress, scanResult, onApprove, onReject, onReset, onBack }) {
   const [activeSubTab, setActiveSubTab] = useState("preview"); // "preview" or "channel"
   const [previewVideoId, setPreviewVideoId] = useState(channel.sampleCovers[0]?.videoId || null);
+  const [skippedOpen, setSkippedOpen] = useState(false);
 
   const channelUrl = `https://www.youtube.com/channel/${channel.channelId}/videos`;
   const fallbackSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(channel.channelName + " 歌ってみた")}`;
@@ -256,6 +257,55 @@ export default function AdminChannelDetail({ channel, status, scanProgress, onAp
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Scan result summary + skipped videos (collapsible) */}
+      {scanResult && (scanResult.catalogMatched != null || scanResult.skippedVideos?.length > 0) && (
+        <div style={{
+          background: "rgba(20,24,50,0.8)", borderRadius: "20px", padding: "24px",
+          border: "1px solid rgba(99,102,241,0.1)", marginTop: "20px", backdropFilter: "blur(10px)"
+        }}>
+          <div style={{ fontSize: "14px", fontWeight: 700, color: "#f1f5f9", marginBottom: "12px" }}>
+            スキャン結果サマリ
+          </div>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "13px", color: "#94a3b8", marginBottom: "12px" }}>
+            <span>発見: {(scanResult.covers?.length || 0) + (scanResult.unmatchedSkipped || 0)}曲</span>
+            <span style={{ color: "#22c55e" }}>カタログ一致: {scanResult.catalogMatched || 0}曲</span>
+            <span style={{ color: "#818cf8" }}>Spotify追加: {scanResult.spotifyAdded || 0}曲</span>
+            <span style={{ color: "#eab308" }}>スキップ: {scanResult.unmatchedSkipped || 0}曲</span>
+          </div>
+          {scanResult.skippedVideos?.length > 0 && (
+            <>
+              <button
+                onClick={() => setSkippedOpen(v => !v)}
+                style={{
+                  background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.25)",
+                  color: "#eab308", fontSize: "12px", padding: "6px 12px", borderRadius: "8px",
+                  cursor: "pointer", marginBottom: skippedOpen ? "12px" : 0,
+                }}
+              >
+                {skippedOpen ? "▼" : "▶"} スキップされた{scanResult.skippedVideos.length}曲を表示
+              </button>
+              {skippedOpen && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12px" }}>
+                  {scanResult.skippedVideos.map((s, i) => (
+                    <div key={i} style={{
+                      padding: "8px 12px", borderRadius: "8px",
+                      background: "rgba(10,14,39,0.5)", border: "1px solid rgba(99,102,241,0.08)",
+                    }}>
+                      <div style={{ color: "#f1f5f9", fontWeight: 500 }}>{s.youtubeTitle}</div>
+                      {s.searchQuery && (
+                        <div style={{ color: "#94a3b8", marginTop: "2px" }}>
+                          クエリ: {s.searchQuery} → 理由: {s.reason}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

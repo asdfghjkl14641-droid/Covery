@@ -176,6 +176,7 @@ export default function Admin() {
   const devMode = useAdminStore(s => s.devMode);
   const setDevMode = useAdminStore(s => s.setDevMode);
   const scanProgress = useAdminStore(s => s.scanProgress);
+  const scanResults = useAdminStore(s => s.scanResults);
   const saveDecisions = useAdminStore(s => s.saveDecisions);
   const startScan = useAdminStore(s => s.startScan);
   const completeScan = useAdminStore(s => s.completeScan);
@@ -448,6 +449,7 @@ export default function Admin() {
             channel={selectedChannel}
             status={getStatus(selectedChannel.channelId)}
             scanProgress={scanProgress[selectedChannel.channelId]}
+            scanResult={scanResults?.[selectedChannel.channelId]}
             onApprove={() => handleApprove(selectedChannel)}
             onReject={() => save({ ...decisions, [selectedChannel.channelId]: "rejected" })}
             onReset={() => { const d = { ...decisions }; delete d[selectedChannel.channelId]; save(d); }}
