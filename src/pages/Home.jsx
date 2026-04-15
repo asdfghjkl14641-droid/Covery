@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Play, Clock, Users } from 'lucide-react'
 import { usePlayerStore } from '../store/usePlayerStore'
 import { useAdminStore } from '../store/useAdminStore'
 import { getApprovedSongs, getApprovedSingers } from '../utils/filterCovers'
+import { fetchSongs as apiFetchSongs, fetchSingers as apiFetchSingers } from '../api/client'
 import data from '../data/metadata.json'
 
 function shuffle(arr) {
@@ -21,6 +22,29 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
   const coverDecisions = useAdminStore(s => s.coverDecisions)
   const songs = useMemo(() => getApprovedSongs(), [approvedIds, devMode, scanResults, coverDecisions])
   const singers = useMemo(() => getApprovedSingers(), [approvedIds, devMode])
+
+  // ── API data ──
+  const [apiSongs, setApiSongs] = useState(null)
+  const [apiSingers, setApiSingers] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    (async () => {
+      const [songsRes, singersRes] = await Promise.all([
+        apiFetchSongs(40, true),
+        apiFetchSingers(10),
+      ])
+      if (songsRes?.songs?.length) {
+        console.log(`[Covery] API: ${songsRes.songs.length} songs loaded`)
+        setApiSongs(songsRes.songs)
+      }
+      if (singersRes?.singers?.length) {
+        console.log(`[Covery] API: ${singersRes.singers.length} singers loaded`)
+        setApiSingers(singersRes.singers)
+      }
+      setLoading(false)
+    })()
+  }, [])
 
   // Build cover song groups from filtered data
   const allCoverSongs = useMemo(() => {
@@ -44,10 +68,36 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
     all.sort((a, b) => (b.cover.publishedAt || '').localeCompare(a.cover.publishedAt || ''))
     return shuffle(all.slice(0, 30)).slice(0, 10)
   })
-  const [singersRandom] = useState(() => shuffle(singers).slice(0, 10))
+  const [singersRandomLocal] = useState(() => shuffle(singers).slice(0, 10))
 
-  // おすすめの曲: 全曲からランダム20曲
-  const [recommended] = useState(() => shuffle(songs).slice(0, 20))
+  // おすすめの曲: JSON-based fallback
+  const [recommendedLocal] = useState(() => shuffle(songs).slice(0, 20))
+
+  // API優先、失敗時はJSONフォールバック
+  const singersRandom = useMemo(() => {
+    if (apiSingers && apiSingers.length > 0) {
+      return apiSingers.map(s => ({
+        channelId: s.channelId,
+        name: s.channelName,
+        thumbnailUrl: s.thumbnailUrl,
+      }))
+    }
+    return singersRandomLocal
+  }, [apiSingers, singersRandomLocal])
+
+  // おすすめの曲: API曲リストをJSON曲にマッチングしてvideoId付きで返す
+  const recommended = useMemo(() => {
+    if (!apiSongs || apiSongs.length === 0) return recommendedLocal
+    const matched = []
+    for (const apiSong of apiSongs) {
+      const jsonSong = songs.find(s =>
+        s.title === apiSong.title && s.originalArtist === apiSong.artistName
+      )
+      if (jsonSong) matched.push(jsonSong)
+      if (matched.length >= 20) break
+    }
+    return matched.length > 0 ? matched : recommendedLocal
+  }, [apiSongs, songs, recommendedLocal])
 
   const { setQueue } = usePlayerStore()
 
@@ -79,6 +129,23 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
     <div className="home-page" style={{ paddingBottom: '40px', paddingTop: '20px' }}>
 
       {/* Section 0: おすすめの曲（試作） */}
+      {loading && recommended.length === 0 && (
+        <section style={{ marginBottom: '40px' }}>
+          <h2 style={{ marginBottom: '16px' }}>おすすめの曲</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} style={{ background: 'var(--surface)', borderRadius: 12, overflow: 'hidden', animation: 'pulse 1.5s ease infinite' }}>
+                <div style={{ width: '100%', aspectRatio: '4/3', background: 'rgba(255,255,255,0.04)' }} />
+                <div style={{ padding: '10px 10px 12px' }}>
+                  <div style={{ height: 13, background: 'rgba(255,255,255,0.08)', borderRadius: 4, marginBottom: 6 }} />
+                  <div style={{ height: 11, background: 'rgba(255,255,255,0.05)', borderRadius: 4, width: '60%' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <style>{`@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.5 } }`}</style>
+        </section>
+      )}
       {recommended.length > 0 && (
         <section style={{ marginBottom: '40px' }}>
           <h2 style={{ marginBottom: '16px' }}>おすすめの曲</h2>
