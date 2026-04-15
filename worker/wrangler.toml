@@ -5,8 +5,8 @@ compatibility_date = "2024-01-01"
 [vars]
 JWT_SECRET = "covery-jwt-secret-2026"
 ADMIN_PASSWORD = "covery2026"
-SPOTIFY_CLIENT_ID = "1278305b15b44f69945b4cf3bb2d29b4"
-SPOTIFY_CLIENT_SECRET = "fb82a9d639e04486afca47b2cf67487f"
+SPOTIFY_CLIENT_ID = "a92479af8aaa449492c99357a79fe66b"
+SPOTIFY_CLIENT_SECRET = "162170e4a91c44c1925b20c63e4c5c93"
 # Anthropic API key for AI-based song identification (Stage 3). Leave empty to disable.
 ANTHROPIC_API_KEY = ""
 
