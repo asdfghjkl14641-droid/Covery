@@ -2,6 +2,10 @@ name = "covery-api"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
+[vars]
+JWT_SECRET = "covery-jwt-secret-2026"
+ADMIN_PASSWORD = "covery2026"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "covery-db"
