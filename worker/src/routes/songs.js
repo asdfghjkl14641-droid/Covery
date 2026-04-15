@@ -7,21 +7,23 @@ export async function handleSongs(request, env) {
   const artistId = url.searchParams.get('artist_id')
 
   try {
+    // Wrap in subquery so we can filter on cover_count
     let query = `
-      SELECT s.id, s.title, s.deezer_rank, a.name AS artist_name,
-        (SELECT COUNT(*) FROM covers c
-         JOIN channels ch ON c.channel_id = ch.id
-         WHERE c.song_id = s.id AND ch.status = 'approved' AND c.status = 'approved'
-        ) AS cover_count
-      FROM songs s
-      JOIN artists a ON s.artist_id = a.id
+      SELECT * FROM (
+        SELECT s.id, s.title, s.deezer_rank, a.name AS artist_name,
+          (SELECT COUNT(*) FROM covers c
+           JOIN channels ch ON c.channel_id = ch.id
+           WHERE c.song_id = s.id AND ch.status = 'approved' AND c.status = 'approved'
+          ) AS cover_count
+        FROM songs s
+        JOIN artists a ON s.artist_id = a.id
     `
     const params = []
     if (artistId) {
       query += ` WHERE s.artist_id = ?`
       params.push(parseInt(artistId))
     }
-    query += ` HAVING cover_count > 0 ORDER BY ${random ? 'RANDOM()' : 's.deezer_rank DESC'} LIMIT ?`
+    query += ` ) WHERE cover_count > 0 ORDER BY ${random ? 'RANDOM()' : 'deezer_rank DESC'} LIMIT ?`
     params.push(limit)
 
     const { results } = await env.DB.prepare(query).bind(...params).all()

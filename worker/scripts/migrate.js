@@ -43,7 +43,7 @@ const lines = []
 lines.push('-- Covery D1 Migration (auto-generated)')
 lines.push('-- Do not edit manually — regenerate via `node scripts/migrate.js`')
 lines.push('')
-lines.push('BEGIN TRANSACTION;')
+// D1 manages transactions automatically — no explicit BEGIN/COMMIT
 lines.push('')
 
 // ── 1. artists ──
@@ -126,7 +126,6 @@ for (const category of Object.keys(cache)) {
 }
 lines.push('')
 
-lines.push('COMMIT;')
 lines.push('')
 
 fs.writeFileSync(OUTPUT_FILE, lines.join('\n'))

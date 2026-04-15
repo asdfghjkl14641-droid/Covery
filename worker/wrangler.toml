@@ -9,4 +9,4 @@ ADMIN_PASSWORD = "covery2026"
 [[d1_databases]]
 binding = "DB"
 database_name = "covery-db"
-database_id = "placeholder-replace-after-creation"
+database_id = "476821dc-d7b2-49ff-9248-dc1509b5eae7"
