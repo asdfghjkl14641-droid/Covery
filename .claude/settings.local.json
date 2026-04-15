@@ -49,7 +49,8 @@
       "Bash(node -c scripts/build-catalog.js)",
       "Bash(node -c scripts/fetch-data.js)",
       "Bash(node -c scripts/fetch-preview.js)",
-      "Bash(node -c scripts/check-rss-updates.js)"
+      "Bash(node -c scripts/check-rss-updates.js)",
+      "Bash(grep -l \"status\\\\|approved\" worker/scripts/*.js)"
     ]
   }
 }

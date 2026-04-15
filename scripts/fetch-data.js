@@ -158,7 +158,8 @@ async function fetchData() {
       const channels = [...singersMap.values()].map(s => ({
         channelId: s.channelId, channelName: s.name, thumbnailUrl: s.thumbnailUrl || '',
       }))
-      db.batchInsertChannels(channels, 'approved')
+      // New channels default to 'pending' — admin must approve via UI
+      db.batchInsertChannels(channels, 'pending')
 
       const covers = []
       for (const song of songsList) {

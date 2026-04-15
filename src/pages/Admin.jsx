@@ -243,6 +243,42 @@ export default function Admin() {
     })();
   }, [isLoggedIn, token]);
 
+  // Pull D1 channel statuses as source of truth on every login (D1 > localStorage)
+  useEffect(() => {
+    if (!token || !isLoggedIn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        let offset = 0; const limit = 200; const merged = {};
+        // Paginate
+        for (;;) {
+          const endpoint = `/api/admin/channels?limit=${limit}&offset=${offset}`;
+          const res = await fetch(`https://covery-api.asdfghjkl14641.workers.dev${endpoint}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }).then(r => r.ok ? r.json() : null);
+          const rows = res?.channels || [];
+          for (const r of rows) {
+            // Store only non-pending so approvedIds stays correct
+            if (r.status && r.status !== 'pending') merged[r.channelId] = r.status;
+          }
+          if (rows.length < limit) break;
+          offset += limit;
+        }
+        if (cancelled) return;
+        const approvedCount = Object.values(merged).filter(v => v === 'approved').length;
+        const rejectedCount = Object.values(merged).filter(v => v === 'rejected').length;
+        console.log(`[Covery] D1 source-of-truth pull: ${approvedCount} approved, ${rejectedCount} rejected`);
+        // Only overwrite if D1 actually has data; otherwise keep local (first-run case)
+        if (Object.keys(merged).length > 0) {
+          useAdminStore.getState().saveDecisions(merged);
+        }
+      } catch (e) {
+        console.warn('[Covery] D1 pull failed:', e.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token, isLoggedIn]);
+
   // One-time migration: sync localStorage decisions to D1
   useEffect(() => {
     if (!token || !isLoggedIn) return;
