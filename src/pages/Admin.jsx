@@ -367,7 +367,7 @@ export default function Admin() {
     setScanError(null);
     startScan(ch.channelId);
     try {
-      const results = await scanChannel(ch.channelId, ch.channelName, (p) => updateScanProgress(ch.channelId, p));
+      const results = await scanChannel(ch.channelId, ch.channelName, (p) => updateScanProgress(ch.channelId, p), token);
       completeScan(ch.channelId, results);
       syncDecisionToAPI(ch.channelId, "approved");
     } catch (e) {

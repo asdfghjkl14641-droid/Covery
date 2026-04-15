@@ -160,6 +160,92 @@ export async function handleApproveCover(request, env, videoId) {
   } catch (e) { return errorResponse(e.message) }
 }
 
+// ══════════════════════════════════════════════════════════
+//  Spotify integration — proxies through Worker to avoid CORS
+// ══════════════════════════════════════════════════════════
+// Simple in-memory token cache keyed by Worker instance lifetime
+let _spotifyTokenCache = null // { token, expiresAt }
+
+async function getSpotifyToken(env) {
+  const now = Date.now()
+  if (_spotifyTokenCache && _spotifyTokenCache.expiresAt > now + 30_000) {
+    return _spotifyTokenCache.token
+  }
+  const id = env.SPOTIFY_CLIENT_ID
+  const secret = env.SPOTIFY_CLIENT_SECRET
+  if (!id || !secret) throw new Error('Spotify credentials not configured')
+  const basic = btoa(`${id}:${secret}`)
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Basic ${basic}`,
+    },
+    body: 'grant_type=client_credentials',
+  })
+  if (!res.ok) throw new Error(`Spotify auth failed: ${res.status}`)
+  const data = await res.json()
+  _spotifyTokenCache = {
+    token: data.access_token,
+    expiresAt: now + (data.expires_in || 3600) * 1000,
+  }
+  return _spotifyTokenCache.token
+}
+
+export async function handleSpotifySearch(request, env) {
+  const unauth = await requireAuth(request, env); if (unauth) return unauth
+  try {
+    const body = await request.json()
+    const query = (body?.query || '').trim()
+    if (!query) return errorResponse('query required', 400)
+    const token = await getSpotifyToken(env)
+    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&market=JP&limit=5`
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) return errorResponse(`Spotify search failed: ${res.status}`, res.status)
+    const data = await res.json()
+    const tracks = (data?.tracks?.items || []).map(t => ({
+      name: t.name,
+      artist: t.artists?.[0]?.name || '',
+      spotifyId: t.id,
+      duration: Math.round((t.duration_ms || 0) / 1000),
+    }))
+    return jsonResponse({ tracks })
+  } catch (e) { return errorResponse(e.message) }
+}
+
+export async function handleAddSong(request, env) {
+  const unauth = await requireAuth(request, env); if (unauth) return unauth
+  try {
+    const body = await request.json()
+    const title = (body?.title || '').trim()
+    const artistName = (body?.artistName || '').trim()
+    const spotifyId = (body?.spotifyId || '').trim()
+    if (!title || !artistName) return errorResponse('title and artistName required', 400)
+
+    // Insert artist (ignore if exists)
+    await env.DB.prepare(`INSERT OR IGNORE INTO artists (name) VALUES (?)`).bind(artistName).run()
+    const artistRow = await env.DB.prepare(`SELECT id FROM artists WHERE name = ?`).bind(artistName).first()
+    if (!artistRow) return errorResponse('Failed to create/find artist', 500)
+
+    // Insert song (ignore if exists)
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO songs (title, artist_id) VALUES (?, ?)`
+    ).bind(title, artistRow.id).run()
+    const songRow = await env.DB.prepare(
+      `SELECT id FROM songs WHERE title = ? AND artist_id = ?`
+    ).bind(title, artistRow.id).first()
+    if (!songRow) return errorResponse('Failed to create/find song', 500)
+
+    return jsonResponse({
+      songId: songRow.id,
+      artistId: artistRow.id,
+      title,
+      artistName,
+      spotifyId,
+    })
+  } catch (e) { return errorResponse(e.message) }
+}
+
 export async function handleAdminStats(request, env) {
   const unauth = await requireAuth(request, env); if (unauth) return unauth
   try {
