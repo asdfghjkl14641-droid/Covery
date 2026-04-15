@@ -12,8 +12,8 @@ export function getApprovedSongs() {
   // Dev mode: show everything
   if (devMode) return metadata.songs
 
-  // No approved channels: show all as fallback (so app isn't empty during development)
-  if (!approvedIds || approvedIds.size === 0) return metadata.songs
+  // No approved channels: return empty (D1/API is source of truth; UI shows "準備中")
+  if (!approvedIds || approvedIds.size === 0) return []
 
   const rejectedVideoIds = new Set(
     Object.entries(coverDecisions || {}).filter(([, v]) => v === 'rejected').map(([k]) => k)
@@ -70,7 +70,7 @@ export function getApprovedSongs() {
 export function getApprovedSingers() {
   const { approvedIds, devMode } = useAdminStore.getState()
   if (devMode) return metadata.singers
-  if (!approvedIds || approvedIds.size === 0) return metadata.singers
+  if (!approvedIds || approvedIds.size === 0) return []
   return metadata.singers.filter(s => approvedIds.has(s.channelId))
 }
 

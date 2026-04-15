@@ -125,6 +125,23 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
     }], 0)
   }
 
+  // Empty-state check: no local songs AND (loading complete AND no API songs)
+  const hasAnyContent = songs.length > 0 || (apiSongs && apiSongs.length > 0) || (apiSingers && apiSingers.length > 0)
+  if (!loading && !hasAnyContent) {
+    return (
+      <div className="home-page" style={{ padding: '80px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>🎵</div>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+          コンテンツを準備中です
+        </h2>
+        <p style={{ fontSize: 14, lineHeight: 1.7 }}>
+          まだ承認された歌い手がいません。<br />
+          しばらくお待ちください。
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="home-page" style={{ paddingBottom: '40px', paddingTop: '20px' }}>
 
