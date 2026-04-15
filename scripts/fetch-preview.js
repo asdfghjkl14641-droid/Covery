@@ -158,7 +158,7 @@ async function fetchPreview() {
 
   // Sync preview channels to D1 as pending
   try {
-    const db = require('./db')
+    const db = (await import('./db.js')).default
     if (db.isAvailable()) {
       console.log('\n[D1] Syncing preview channels to D1 (status=pending) ...')
       const channels = result.channels.map(c => ({

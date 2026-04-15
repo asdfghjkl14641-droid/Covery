@@ -152,7 +152,7 @@ async function fetchData() {
 
   // Sync to D1 (channels + covers)
   try {
-    const db = require('./db')
+    const db = (await import('./db.js')).default
     if (db.isAvailable()) {
       console.log('\n[D1] Syncing fetched covers to D1 ...')
       const channels = [...singersMap.values()].map(s => ({

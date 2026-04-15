@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { loadCache, saveCache, getCached, setCache, printCacheStats } from './cacheManager.js'
+import db from './db.js'
 
 dotenv.config()
 
@@ -387,7 +388,6 @@ async function buildCatalog() {
 
   // Sync to D1
   try {
-    const db = require('./db')
     if (db.isAvailable()) {
       console.log('\n[D1] Syncing catalog to D1 ...')
       const artists = catalog.artists.map(a => ({ name: a.name, reading: a.reading }))

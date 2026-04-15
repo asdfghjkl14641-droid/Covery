@@ -171,7 +171,7 @@ async function checkRssUpdates() {
   // Sync newly-discovered covers to D1
   if (newCovers.length > 0) {
     try {
-      const db = require('./db')
+      const db = (await import('./db.js')).default
       if (db.isAvailable()) {
         console.log(`\n[D1] Syncing ${newCovers.length} new covers to D1 ...`)
         db.batchInsertCovers(newCovers)

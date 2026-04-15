@@ -13,11 +13,14 @@
 //   db.batchInsertCovers([{videoId, songTitle, artistName, channelId, ...}]);
 // ══════════════════════════════════════════════════════════
 
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const WORKER_DIR = path.join(__dirname, '..', 'worker');
 const BATCH_SIZE = 50;
 
@@ -132,10 +135,23 @@ function isAvailable() {
   } catch (_) { return false; }
 }
 
-module.exports = {
+export {
   executeSQL,
   executeSQLFile,
   batchExecute,
+  esc as escape,
+  batchInsertArtists,
+  batchInsertSongs,
+  batchInsertChannels,
+  batchInsertCovers,
+  isAvailable,
+};
+
+export default {
+  executeSQL,
+  executeSQLFile,
+  batchExecute,
+  escape: esc,
   batchInsertArtists,
   batchInsertSongs,
   batchInsertChannels,
