@@ -8,6 +8,7 @@ import {
   handleApproveChannel, handleRejectChannel, handleResetChannel,
   handleRejectCover, handleApproveCover, handleAdminStats,
   handleSpotifySearch, handleAddSong,
+  handleAddCover, handleIdentifySong,
 } from './routes/admin.js'
 
 export default {
@@ -73,6 +74,10 @@ export default {
       if (path === '/api/admin/spotify-search' && method === 'POST') return await handleSpotifySearch(request, env)
 
       if (path === '/api/admin/add-song' && method === 'POST') return await handleAddSong(request, env)
+
+      if (path === '/api/admin/add-cover' && method === 'POST') return await handleAddCover(request, env)
+
+      if (path === '/api/admin/identify-song' && method === 'POST') return await handleIdentifySong(request, env)
 
       return errorResponse('Not Found', 404)
     } catch (e) {

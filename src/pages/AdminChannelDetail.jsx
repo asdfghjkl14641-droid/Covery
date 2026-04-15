@@ -270,10 +270,10 @@ export default function AdminChannelDetail({ channel, status, scanProgress, scan
             スキャン結果サマリ
           </div>
           <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "13px", color: "#94a3b8", marginBottom: "12px" }}>
-            <span>発見: {(scanResult.covers?.length || 0) + (scanResult.unmatchedSkipped || 0)}曲</span>
-            <span style={{ color: "#22c55e" }}>カタログ一致: {scanResult.catalogMatched || 0}曲</span>
-            <span style={{ color: "#818cf8" }}>Spotify追加: {scanResult.spotifyAdded || 0}曲</span>
+            <span style={{ color: "#22c55e" }}>Stage 2 (逆引き): {scanResult.stage2Matched || 0}曲</span>
+            <span style={{ color: "#818cf8" }}>Stage 3 (AI判定): {scanResult.stage3Matched || 0}曲</span>
             <span style={{ color: "#eab308" }}>スキップ: {scanResult.unmatchedSkipped || 0}曲</span>
+            <span>登録合計: {scanResult.covers?.length || 0}曲</span>
           </div>
           {scanResult.skippedVideos?.length > 0 && (
             <>

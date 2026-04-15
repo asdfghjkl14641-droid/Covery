@@ -94,6 +94,8 @@ export const useAdminStore = create((set, get) => ({
       catalogMatched: results.catalogMatched || 0,
       spotifyAdded: results.spotifyAdded || 0,
       unmatchedSkipped: results.unmatchedSkipped || 0,
+      stage2Matched: results.stage2Matched || 0,
+      stage3Matched: results.stage3Matched || 0,
       skippedVideos: results.skippedVideos || [],
     } }
     saveJSON(SCAN_RESULTS_KEY, sr)

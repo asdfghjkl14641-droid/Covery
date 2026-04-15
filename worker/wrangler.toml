@@ -7,6 +7,8 @@ JWT_SECRET = "covery-jwt-secret-2026"
 ADMIN_PASSWORD = "covery2026"
 SPOTIFY_CLIENT_ID = "1278305b15b44f69945b4cf3bb2d29b4"
 SPOTIFY_CLIENT_SECRET = "fb82a9d639e04486afca47b2cf67487f"
+# Anthropic API key for AI-based song identification (Stage 3). Leave empty to disable.
+ANTHROPIC_API_KEY = ""
 
 [[d1_databases]]
 binding = "DB"

@@ -206,154 +206,269 @@ async function lookupSongOnSpotify(videoTitle, token) {
   return null
 }
 
+// ══════════════════════════════════════════════════════════
+//  Worker API helpers for Stage 2/3
+// ══════════════════════════════════════════════════════════
+async function fetchPopularSongsFromD1(limit = 200) {
+  try {
+    const r = await fetch(`${API_BASE}/api/songs?limit=${limit}&random=false`)
+    if (!r.ok) return []
+    const d = await r.json()
+    return (d?.songs || []).map(s => ({
+      id: s.id, title: s.title, artistName: s.artistName,
+    }))
+  } catch (_) { return [] }
+}
+
+async function addCoverViaWorker(token, { videoId, songId, channelId, youtubeTitle, viewCount, publishedAt }) {
+  try {
+    const r = await fetch(`${API_BASE}/api/admin/add-cover`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ videoId, songId, channelId, youtubeTitle, viewCount, publishedAt }),
+    })
+    if (!r.ok) return null
+    return await r.json()
+  } catch (_) { return null }
+}
+
+async function identifySongViaClaude(token, videoTitle, channelName) {
+  try {
+    const r = await fetch(`${API_BASE}/api/admin/identify-song`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ videoTitle, channelName }),
+    })
+    if (!r.ok) return null
+    return await r.json()
+  } catch (_) { return null }
+}
+
+// Search YouTube for "{title} {artist} {channelName}" — returns videos with channelId
+async function youtubeSearchQuery(query, maxResults = 3) {
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}`
+    const d = await ytFetch(url)
+    return (d.items || []).map(item => ({
+      videoId: item.id?.videoId,
+      channelId: item.snippet?.channelId,
+      title: item.snippet?.title || '',
+      publishedAt: item.snippet?.publishedAt?.split('T')[0] || '',
+    })).filter(v => v.videoId)
+  } catch (_) { return [] }
+}
+
 /**
- * Scan a channel for cover videos.
+ * 3-stage channel scan:
+ *   Stage 1: (already done — channel approved before this runs)
+ *   Stage 2: Reverse-search. For each popular song in D1, YouTube-search
+ *            "{title} {artist} {channelName}" and pick the result whose
+ *            channelId matches the approved channel.
+ *   Stage 3: Fetch remaining channel videos, ask Claude API to identify
+ *            song/artist, verify via Spotify, add to D1 catalog + covers.
+ *
  * @param {string} channelId
  * @param {string} channelName
- * @param {function} onProgress - ({found, filtered, current, newlyAdded?}) => void
- * @param {string} [adminToken] - If provided, unknown songs are looked up via Spotify and added to D1
- * @returns {Promise<{covers, totalFound, totalFiltered, catalogMatched, spotifyAdded, unmatchedSkipped}>}
+ * @param {function} onProgress - ({stage, message, matched?, current?}) => void
+ * @param {string} [adminToken] - Required for Stage 2/3 (they call Worker APIs)
+ * @returns {Promise<{covers, stage2Matched, stage3Matched, skipped, alreadyExists, total, skippedVideos}>}
  */
 export async function scanChannel(channelId, channelName, onProgress = () => {}, adminToken = null) {
-  const covers = []
-  const unknownVideos = []   // videos that didn't match local catalog — will be probed via Spotify
-  let totalFound = 0
-  let pageToken = ''
-  let catalogMatched = 0
+  const covers = []               // for backwards-compat with Admin store
+  const coveredVideoIds = new Set()
+  const coveredSongIds = new Set()
+  let stage2Matched = 0
+  let stage3Matched = 0
+  let skipped = 0
+  const skippedVideos = []
 
-  // Up to 3 pages (150 results max)
+  // If no admin token, fall back to minimal behaviour: fetch titles but don't sync
+  if (!adminToken) {
+    onProgress({ stage: 'error', message: 'Admin token required for 3-stage scan' })
+    return {
+      covers: [], stage2Matched: 0, stage3Matched: 0,
+      skipped: 0, alreadyExists: 0, total: 0, skippedVideos: [],
+    }
+  }
+
+  // ════════════════════════════════════════
+  //  Stage 2: Reverse-search
+  // ════════════════════════════════════════
+  onProgress({ stage: 'reverse-search', message: '逆引き検索中... (Stage 2)' })
+  const popularSongs = await fetchPopularSongsFromD1(200)
+  console.log(`[Covery] Stage 2: ${popularSongs.length}曲でチャンネル内逆引き検索`)
+
+  // Cap how many songs we probe to conserve YT quota (100 searches ≈ 10k units)
+  const SONGS_TO_PROBE = Math.min(popularSongs.length, 100)
+  for (let i = 0; i < SONGS_TO_PROBE; i++) {
+    const song = popularSongs[i]
+    if (coveredSongIds.has(song.id)) continue
+    const query = `${song.title} ${song.artistName} ${channelName}`
+    const hits = await youtubeSearchQuery(query, 3)
+    const match = hits.find(h => h.channelId === channelId)
+    if (match && !coveredVideoIds.has(match.videoId)) {
+      // Insert cover into D1
+      const res = await addCoverViaWorker(adminToken, {
+        videoId: match.videoId,
+        songId: song.id,
+        channelId,
+        youtubeTitle: match.title,
+        viewCount: 0,
+        publishedAt: match.publishedAt,
+      })
+      if (res) {
+        stage2Matched++
+        coveredVideoIds.add(match.videoId)
+        coveredSongIds.add(song.id)
+        covers.push({
+          videoId: match.videoId,
+          title: song.title,
+          originalArtist: song.artistName,
+          channelId, channelName,
+          publishedAt: match.publishedAt,
+        })
+        onProgress({
+          stage: 'reverse-search', matched: stage2Matched,
+          current: `${song.title} / ${song.artistName}`,
+        })
+        console.log(`[Stage2] 一致: "${song.title}" / "${song.artistName}" (videoId=${match.videoId})`)
+      }
+    }
+    await sleep(250) // polite to YouTube API
+  }
+
+  // ════════════════════════════════════════
+  //  Stage 3: Claude API identification
+  // ════════════════════════════════════════
+  onProgress({ stage: 'ai-identify', message: 'AI判定中... (Stage 3)' })
+  // Fetch the channel's 歌ってみた videos
+  const channelVideos = []
+  let pageToken = ''
   for (let page = 0; page < 3; page++) {
     const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&q=歌ってみた&type=video&maxResults=50${pageToken ? `&pageToken=${pageToken}` : ''}`
-
-    const data = await ytFetch(url)
+    let data
+    try { data = await ytFetch(url) } catch { break }
     const items = data.items || []
-    totalFound += items.length
-
     for (const item of items) {
-      const title = item.snippet.title
+      const title = item.snippet?.title || ''
       const lower = title.toLowerCase()
-      const isExcluded = EXCLUDE_KEYWORDS.some(k => lower.includes(k.toLowerCase()))
-      if (isExcluded) continue
-
-      const videoId = item.id.videoId
-
-      // Match to local catalog (fast path)
-      const match = findCatalogMatch(title)
-      if (match) {
-        catalogMatched++
-        covers.push({
-          videoId,
-          title: match.title,
-          originalArtist: match.artist,
-          channelId,
-          channelName,
-          publishedAt: item.snippet.publishedAt?.split('T')[0] || '',
-        })
-        onProgress({ found: totalFound, filtered: covers.length, current: match.title })
-      } else if (adminToken) {
-        // Queue for Spotify lookup after page-scan completes
-        unknownVideos.push({
-          videoId, title,
-          publishedAt: item.snippet.publishedAt?.split('T')[0] || '',
-        })
-      }
+      if (EXCLUDE_KEYWORDS.some(k => lower.includes(k.toLowerCase()))) continue
+      const videoId = item.id?.videoId
+      if (!videoId || coveredVideoIds.has(videoId)) continue
+      channelVideos.push({
+        videoId, title,
+        publishedAt: item.snippet?.publishedAt?.split('T')[0] || '',
+      })
     }
-
     pageToken = data.nextPageToken || ''
     if (!pageToken) break
-    await sleep(500)
+    await sleep(400)
   }
 
-  // ── Spotify lookup for unknown videos ──
-  let spotifyAdded = 0
-  let unmatchedSkipped = 0
-  const skippedVideos = []  // for debug display
+  console.log(`[Covery] Stage 3: ${channelVideos.length}曲をAIで判定`)
 
-  if (adminToken && unknownVideos.length > 0) {
-    onProgress({
-      found: totalFound, filtered: covers.length,
-      current: `Spotifyで${unknownVideos.length}曲検索中...`,
+  for (const video of channelVideos) {
+    const result = await identifySongViaClaude(adminToken, video.title, channelName)
+    // Claude disabled (no API key) → skip cleanly
+    if (!result || result.skipped) {
+      skipped++
+      skippedVideos.push({
+        youtubeTitle: video.title, searchQuery: '',
+        reason: result?.reason || 'claude_api_error',
+      })
+      continue
+    }
+    if (!result.songTitle || !result.artistName) {
+      skipped++
+      console.log(`[Stage3 スキップ] "${video.title}" → Claude判定不能`)
+      skippedVideos.push({
+        youtubeTitle: video.title, searchQuery: '',
+        reason: 'claude_returned_null',
+      })
+      continue
+    }
+
+    // Verify via Spotify before trusting Claude's output, then add to D1
+    const verification = await spotifySearchViaWorker(`${result.songTitle} ${result.artistName}`, adminToken)
+    let canonicalTitle = result.songTitle
+    let canonicalArtist = result.artistName
+    let spotifyId = ''
+    if (verification && verification.length > 0) {
+      const best = pickBestTrack(verification, `${result.songTitle} ${result.artistName}`)
+      if (best) {
+        canonicalTitle = best.name
+        canonicalArtist = best.artist
+        spotifyId = best.spotifyId
+      }
+    }
+
+    const added = await addSongViaWorker(canonicalTitle, canonicalArtist, spotifyId, adminToken)
+    if (!added) {
+      skipped++
+      skippedVideos.push({
+        youtubeTitle: video.title,
+        searchQuery: `${result.songTitle} / ${result.artistName}`,
+        reason: 'add_song_failed',
+      })
+      continue
+    }
+
+    const cres = await addCoverViaWorker(adminToken, {
+      videoId: video.videoId,
+      songId: added.songId,
+      channelId,
+      youtubeTitle: video.title,
+      viewCount: 0,
+      publishedAt: video.publishedAt,
     })
-    for (const v of unknownVideos) {
-      const queries = extractSpotifyQueries(v.title)
-      if (queries.length === 0) {
-        unmatchedSkipped++
-        console.log(`[スキップ] YouTube: "${v.title}" → 検索クエリ抽出できず`)
-        skippedVideos.push({ youtubeTitle: v.title, searchQuery: '', reason: 'no_query_extracted' })
-        continue
-      }
-
-      const result = await lookupSongOnSpotify(v.title, adminToken)
-      if (!result) {
-        unmatchedSkipped++
-        console.log(`[スキップ] YouTube: "${v.title}" → Spotify検索クエリ: ${queries.map(q => `"${q}"`).join(', ')} → 該当なし`)
-        skippedVideos.push({
-          youtubeTitle: v.title,
-          searchQuery: queries.join(' | '),
-          reason: 'no_spotify_match',
-        })
-        continue
-      }
-
-      const { track: best, query: usedQuery, stage } = result
-      const added = await addSongViaWorker(best.name, best.artist, best.spotifyId, adminToken)
-      if (!added) {
-        unmatchedSkipped++
-        console.log(`[スキップ] YouTube: "${v.title}" → 曲検出できたがD1追加失敗 (${best.name} / ${best.artist})`)
-        skippedVideos.push({
-          youtubeTitle: v.title,
-          searchQuery: usedQuery,
-          reason: 'add_song_failed',
-        })
-        continue
-      }
-
-      spotifyAdded++
-      console.log(`[追加] YouTube: "${v.title}" → Spotify: "${added.title}" / "${added.artistName}" (stage=${stage})`)
-      covers.push({
-        videoId: v.videoId,
-        title: added.title,
-        originalArtist: added.artistName,
-        channelId, channelName,
-        publishedAt: v.publishedAt,
+    if (!cres) {
+      skipped++
+      skippedVideos.push({
+        youtubeTitle: video.title,
+        searchQuery: `${canonicalTitle} / ${canonicalArtist}`,
+        reason: 'add_cover_failed',
       })
-      onProgress({
-        found: totalFound, filtered: covers.length,
-        current: `+ ${added.title} (${added.artistName}) をカタログに追加`,
-        newlyAdded: { title: added.title, artist: added.artistName },
-      })
-      await sleep(200)
+      continue
     }
-  } else if (unknownVideos.length > 0) {
-    unmatchedSkipped += unknownVideos.length
-    for (const v of unknownVideos) {
-      skippedVideos.push({ youtubeTitle: v.title, searchQuery: '', reason: 'no_admin_token' })
-    }
+
+    stage3Matched++
+    coveredVideoIds.add(video.videoId)
+    covers.push({
+      videoId: video.videoId,
+      title: canonicalTitle,
+      originalArtist: canonicalArtist,
+      channelId, channelName,
+      publishedAt: video.publishedAt,
+    })
+    console.log(`[Stage3] 追加: "${video.title}" → "${canonicalTitle}" / "${canonicalArtist}" (confidence=${result.confidence})`)
+    onProgress({
+      stage: 'ai-identify', matched: stage3Matched,
+      current: `${canonicalTitle} / ${canonicalArtist}`,
+    })
+    await sleep(300) // rate-limit Claude + Spotify
   }
 
-  // Batch fetch view counts (50 at a time)
-  for (let i = 0; i < covers.length; i += 50) {
-    const batch = covers.slice(i, i + 50)
-    const ids = batch.map(c => c.videoId).join(',')
-    try {
-      const data = await ytFetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids}`)
-      for (const item of (data.items || [])) {
-        const cover = batch.find(c => c.videoId === item.id)
-        if (cover) cover.viewCount = parseInt(item.statistics?.viewCount || '0', 10)
-      }
-    } catch (_) { /* ignore stats errors */ }
-    await sleep(300)
-  }
+  const total = stage2Matched + stage3Matched
+  onProgress({
+    stage: 'done',
+    message: `スキャン完了: 逆引き${stage2Matched}曲 + AI判定${stage3Matched}曲 + スキップ${skipped}曲`,
+  })
+  console.log(`[Covery] スキャン完了: Stage2=${stage2Matched}, Stage3=${stage3Matched}, skipped=${skipped}, total=${total}`)
 
-  onProgress({ found: totalFound, filtered: covers.length, current: '完了' })
-  console.log(`[Covery] スキャン完了: ${totalFound}曲発見 / カタログ一致: ${catalogMatched}曲 / Spotify追加: ${spotifyAdded}曲 / スキップ: ${unmatchedSkipped}曲`)
-  if (skippedVideos.length > 0) {
-    console.log(`[Covery] スキップされた ${skippedVideos.length} 曲:`, skippedVideos)
-  }
   return {
-    covers, totalFound, totalFiltered: covers.length,
-    catalogMatched, spotifyAdded, unmatchedSkipped,
+    covers,
+    stage2Matched,
+    stage3Matched,
+    skipped,
+    alreadyExists: 0,
+    total,
     skippedVideos,
+    // Backwards-compat fields (Admin UI / store consumes these)
+    totalFound: total + skipped,
+    totalFiltered: total,
+    catalogMatched: stage2Matched,
+    spotifyAdded: stage3Matched,
+    unmatchedSkipped: skipped,
   }
 }
 

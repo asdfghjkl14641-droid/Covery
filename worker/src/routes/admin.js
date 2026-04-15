@@ -255,6 +255,101 @@ export async function handleAddSong(request, env) {
   } catch (e) { return errorResponse(e.message) }
 }
 
+// ══════════════════════════════════════════════════════════
+//  Cover insert — used by Stage 2/3 of the 3-stage scanner
+// ══════════════════════════════════════════════════════════
+export async function handleAddCover(request, env) {
+  const unauth = await requireAuth(request, env); if (unauth) return unauth
+  try {
+    const body = await request.json()
+    const videoId = (body?.videoId || '').trim()
+    const songId = parseInt(body?.songId, 10)
+    const channelId = (body?.channelId || '').trim() // YouTube channel ID string
+    const youtubeTitle = (body?.youtubeTitle || '').trim()
+    const viewCount = parseInt(body?.viewCount || 0, 10) || 0
+    const publishedAt = (body?.publishedAt || '').trim()
+    if (!videoId || !songId || !channelId) {
+      return errorResponse('videoId, songId, channelId required', 400)
+    }
+
+    // Resolve the channel's internal row id (must exist)
+    const chRow = await env.DB.prepare(
+      `SELECT id FROM channels WHERE channel_id = ?`
+    ).bind(channelId).first()
+    if (!chRow) return errorResponse('Channel not found in DB', 404)
+
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO covers
+       (video_id, song_id, channel_id, youtube_title, view_count, published_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'approved')`
+    ).bind(videoId, songId, chRow.id, youtubeTitle, viewCount, publishedAt).run()
+
+    return jsonResponse({ success: true, videoId, songId })
+  } catch (e) { return errorResponse(e.message) }
+}
+
+// ══════════════════════════════════════════════════════════
+//  Claude-based song identification (Stage 3)
+// ══════════════════════════════════════════════════════════
+export async function handleIdentifySong(request, env) {
+  const unauth = await requireAuth(request, env); if (unauth) return unauth
+  const apiKey = env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return jsonResponse({
+      songTitle: null, artistName: null, confidence: null,
+      skipped: true, reason: 'ANTHROPIC_API_KEY_not_configured',
+    })
+  }
+  try {
+    const body = await request.json()
+    const videoTitle = (body?.videoTitle || '').trim()
+    const channelName = (body?.channelName || '').trim()
+    if (!videoTitle) return errorResponse('videoTitle required', 400)
+
+    const prompt = `以下のYouTube動画タイトルから、カバーされている原曲の曲名とアーティスト名を判定してください。歌ってみた（カバー）動画のタイトルです。
+
+動画タイトル: "${videoTitle}"
+チャンネル名: "${channelName}"
+
+以下のJSON形式のみで回答してください。判定できない場合は両方nullを返してください。説明文やMarkdownコードブロックは一切含めないでください。
+{"songTitle": "曲名", "artistName": "アーティスト名", "confidence": "high|medium|low"}`
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+    if (!res.ok) {
+      const errText = await res.text()
+      return errorResponse(`Anthropic API error ${res.status}: ${errText.slice(0, 200)}`, res.status)
+    }
+    const data = await res.json()
+    const text = data?.content?.[0]?.text || ''
+    // Try to parse JSON out of Claude's response
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      return jsonResponse({ songTitle: null, artistName: null, confidence: null, skipped: true, reason: 'parse_error', rawText: text })
+    }
+    let parsed
+    try { parsed = JSON.parse(jsonMatch[0]) } catch {
+      return jsonResponse({ songTitle: null, artistName: null, confidence: null, skipped: true, reason: 'json_parse_error' })
+    }
+    return jsonResponse({
+      songTitle: parsed.songTitle || null,
+      artistName: parsed.artistName || null,
+      confidence: parsed.confidence || null,
+    })
+  } catch (e) { return errorResponse(e.message) }
+}
+
 export async function handleAdminStats(request, env) {
   const unauth = await requireAuth(request, env); if (unauth) return unauth
   try {
