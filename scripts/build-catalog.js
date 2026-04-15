@@ -307,24 +307,6 @@ async function deezerGet(url, retries = 3) {
   return null
 }
 
-async function spotifyGet(url, token) {
-  try {
-    const res = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } })
-    return res.data
-  } catch (_) {
-    return null
-  }
-}
-
-async function getSpotifyToken() {
-  const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64')
-  const res = await axios.post('https://accounts.spotify.com/api/token',
-    'grant_type=client_credentials',
-    { headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
-  )
-  return res.data.access_token
-}
-
 function resolveJapaneseName(name) {
   return NAME_MAP[name] || name
 }
@@ -398,264 +380,222 @@ function saveCatalog(catalog) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  SNOWBALL HELPERS (Spotify-primary, related-artists expansion)
+//  DEEZER-ONLY SNOWBALL BUILDER
 // ══════════════════════════════════════════════════════════
 
-// Genre mapping — Spotify english tags → 日本語カテゴリ
+// Deezer genre → 日本語カテゴリ (album.genres[].name.toLowerCase() で照合)
 const GENRE_MAP = {
   'j-pop': 'J-POP',
-  'japanese pop': 'J-POP',
+  'pop': 'J-POP',
   'j-rock': '邦ロック',
-  'japanese rock': '邦ロック',
+  'rock': '邦ロック',
+  'alternative': 'オルタナティブ',
   'anime': 'アニソン',
-  'vocaloid': 'ボカロ',
-  'visual kei': 'V系',
-  'city pop': 'シティポップ',
-  'enka': '演歌',
-  'japanese hip hop': 'ヒップホップ',
-  'j-rap': 'ヒップホップ',
-  'japanese r&b': 'R&B',
-  'japanese indie': 'インディーズ',
-  'japanese metal': 'メタル',
-  'j-idol': 'アイドル',
-  'j-dance': 'ダンス',
+  'rap/hip hop': 'ヒップホップ',
+  'hip hop': 'ヒップホップ',
+  'r&b': 'R&B',
+  'electro': 'エレクトロ',
+  'metal': 'メタル',
+  'jazz': 'ジャズ',
+  'classical': 'クラシック',
+  'reggae': 'レゲエ',
+  'folk': 'フォーク',
+  'asian music': 'J-POP',
+  'korean pop': 'K-POP',
   'k-pop': 'K-POP',
-  'k-pop boy group': 'K-POP',
-  'k-pop girl group': 'K-POP',
-  'japanese reggae': 'レゲエ',
-  'japanese jazz': 'ジャズ',
-  'japanese punk': 'パンク',
-  'okinawan pop': '沖縄ポップ',
-  'shibuya-kei': '渋谷系',
-  'kayokyoku': '歌謡曲',
-  'japanese soundtrack': 'サウンドトラック',
-  'japanese classical': 'クラシック',
-  'japanese folk': 'フォーク',
+  'films/games': 'サウンドトラック',
+  'soundtrack': 'サウンドトラック',
+  'kids': 'キッズ',
+  'latin music': 'ラテン',
+  'african music': 'アフリカ',
+  'dance': 'ダンス',
+  'soul & funk': 'ソウル',
+  'soul': 'ソウル',
+  'funk': 'ファンク',
+  'blues': 'ブルース',
+  'country': 'カントリー',
+  'enka': '演歌',
 }
 
-function mapGenre(genres) {
-  for (const g of (genres || [])) {
-    const lower = (g || '').toLowerCase()
-    for (const [key, value] of Object.entries(GENRE_MAP)) {
-      if (lower.includes(key)) return value
-    }
+function mapGenre(name) {
+  if (!name) return 'J-POP'
+  const lower = String(name).toLowerCase()
+  for (const [key, value] of Object.entries(GENRE_MAP)) {
+    if (lower.includes(key)) return value
   }
   return 'J-POP'
 }
 
-const JP_GENRE_MARKERS = [
-  'j-pop', 'j-rock', 'japanese', 'anime', 'enka', 'visual kei',
-  'city pop', 'kayokyoku', 'japanese r&b', 'japanese hip hop',
-  'japanese indie', 'vocaloid', 'japanese metal', 'j-dance',
-  'j-idol', 'japanese reggae', 'japanese jazz', 'japanese punk',
-  'okinawan pop', 'shibuya-kei', 'k-pop',
-]
-
+// Japanese artist detection (Deezer has no artist-level genres)
 function isJapaneseArtist(artist, seedNames = new Set()) {
   if (!artist) return false
   if (seedNames.has(artist.name)) return true
-  const genres = artist.genres || []
-  if (genres.some(g => JP_GENRE_MARKERS.some(jp => (g || '').toLowerCase().includes(jp)))) return true
   if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(artist.name || '')) return true
   return false
 }
 
-// Spotify GET with 429 handling (Retry-After) + up to 3 retries
-async function spotifyGetRetry(url, token, maxRetries = 3) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-        validateStatus: () => true,
-      })
-      if (res.status === 200) return res.data
-      if (res.status === 429) {
-        const wait = parseInt(res.headers['retry-after'] || '1', 10) * 1000 + 500
-        console.log(`  ⚠ 429 Rate limit — waiting ${wait}ms`)
-        await sleep(wait)
-        continue
-      }
-      if (res.status === 404) return null
-      if (res.status === 401) {
-        // Token might have expired; fall through to caller to refresh
-        console.log('  ⚠ 401 Unauthorized — caller should refresh token')
-        return null
-      }
-      console.log(`  ⚠ Spotify ${res.status}: ${url.slice(0, 80)}`)
-      return null
-    } catch (e) {
-      if (attempt === maxRetries - 1) return null
-      await sleep(500)
-    }
-  }
-  return null
-}
+// ══════════════════════════════════════════════════════════
+//  Deezer helpers (all cached, 200ms politeness delay)
+// ══════════════════════════════════════════════════════════
 
-async function getArtistDetail(spotifyId, token) {
-  const cacheKey = `artist_detail_${spotifyId}`
-  const cached = getCached('spotifyArtistDetail', cacheKey)
-  if (cached) return cached
-  const data = await spotifyGetRetry(`https://api.spotify.com/v1/artists/${spotifyId}`, token)
-  if (data) setCache('spotifyArtistDetail', cacheKey, data)
-  await sleep(300)
+async function deezerJSON(url) {
+  const data = await deezerGet(url)
+  await sleep(200)
   return data
 }
 
-async function searchArtist(name, token) {
-  const cacheKey = `artist_search_${name}`
-  const cached = getCached('spotifyArtistSearch', cacheKey)
+async function deezerSearchArtist(name) {
+  const cacheKey = `dz_search_${name}`
+  const cached = getCached('deezerArtistSearch', cacheKey)
   if (cached) return cached
-  const data = await spotifyGetRetry(
-    `https://api.spotify.com/v1/search?q=${encodeURIComponent(name)}&type=artist&market=JP&limit=3`,
-    token
-  )
-  const hit = data?.artists?.items?.[0] || null
-  if (hit) setCache('spotifyArtistSearch', cacheKey, hit)
-  await sleep(300)
+  const data = await deezerJSON(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=1`)
+  const hit = data?.data?.[0] || null
+  if (hit) setCache('deezerArtistSearch', cacheKey, hit)
   return hit
 }
 
-async function getAllAlbums(spotifyId, token) {
-  const cacheKey = `artist_albums_${spotifyId}`
-  const cached = getCached('spotifyAlbums', cacheKey)
+async function deezerGetArtistById(deezerId) {
+  const cacheKey = `dz_artist_${deezerId}`
+  const cached = getCached('deezerArtistDetail', cacheKey)
   if (cached) return cached
-  const albums = []
-  let offset = 0
-  while (true) {
-    const data = await spotifyGetRetry(
-      `https://api.spotify.com/v1/artists/${spotifyId}/albums?market=JP&include_groups=album,single&limit=50&offset=${offset}`,
-      token
-    )
-    if (!data) break
-    const items = data.items || []
-    albums.push(...items)
-    if (items.length < 50) break
-    offset += 50
-    await sleep(300)
-  }
-  setCache('spotifyAlbums', cacheKey, albums)
+  const data = await deezerJSON(`https://api.deezer.com/artist/${deezerId}`)
+  if (data && data.id) setCache('deezerArtistDetail', cacheKey, data)
+  return data
+}
+
+async function deezerGetAlbumsByArtist(deezerId) {
+  const cacheKey = `dz_albums_${deezerId}`
+  const cached = getCached('deezerAlbums', cacheKey)
+  if (cached) return cached
+  const data = await deezerJSON(`https://api.deezer.com/artist/${deezerId}/albums?limit=100`)
+  const albums = data?.data || []
+  setCache('deezerAlbums', cacheKey, albums)
   return albums
 }
 
-async function getAlbumTracks(albumId, token) {
-  const cacheKey = `album_tracks_${albumId}`
-  const cached = getCached('spotifyAlbumTracks', cacheKey)
+async function deezerGetAlbumTracks(albumId) {
+  const cacheKey = `dz_album_tracks_${albumId}`
+  const cached = getCached('deezerAlbumTracks', cacheKey)
   if (cached) return cached
-  const data = await spotifyGetRetry(
-    `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=50`,
-    token
-  )
-  const tracks = data?.items || []
-  setCache('spotifyAlbumTracks', cacheKey, tracks)
-  await sleep(300)
+  const data = await deezerJSON(`https://api.deezer.com/album/${albumId}/tracks?limit=100`)
+  const tracks = data?.data || []
+  setCache('deezerAlbumTracks', cacheKey, tracks)
   return tracks
 }
 
-async function getRelatedArtists(spotifyId, token) {
-  const cacheKey = `artist_related_${spotifyId}`
-  const cached = getCached('spotifyRelated', cacheKey)
+async function deezerGetAlbumDetail(albumId) {
+  const cacheKey = `dz_album_detail_${albumId}`
+  const cached = getCached('deezerAlbumDetail', cacheKey)
   if (cached) return cached
-  const data = await spotifyGetRetry(
-    `https://api.spotify.com/v1/artists/${spotifyId}/related-artists`,
-    token
-  )
-  const artists = data?.artists || []
-  setCache('spotifyRelated', cacheKey, artists)
-  await sleep(300)
-  return artists
+  const data = await deezerJSON(`https://api.deezer.com/album/${albumId}`)
+  if (data) setCache('deezerAlbumDetail', cacheKey, data)
+  return data
+}
+
+async function deezerGetRelatedArtists(deezerId) {
+  const cacheKey = `dz_related_${deezerId}`
+  const cached = getCached('deezerRelated', cacheKey)
+  if (cached) return cached
+  const data = await deezerJSON(`https://api.deezer.com/artist/${deezerId}/related?limit=20`)
+  const related = data?.data || []
+  setCache('deezerRelated', cacheKey, related)
+  return related
+}
+
+// Derive genre by looking at the artist's first album
+async function deezerResolveGenre(deezerId) {
+  const albums = await deezerGetAlbumsByArtist(deezerId)
+  if (albums.length === 0) return 'J-POP'
+  const album = await deezerGetAlbumDetail(albums[0].id)
+  const gArr = album?.genres?.data || []
+  if (gArr.length === 0) return 'J-POP'
+  return mapGenre(gArr[0].name)
 }
 
 // ══════════════════════════════════════════════════════════
-//  MAIN (Snowball — Spotify-primary)
+//  MAIN (Deezer-only snowball)
 // ══════════════════════════════════════════════════════════
 async function buildCatalog() {
   const startTime = Date.now()
-  console.log('=== Covery Catalog Builder v4 (Snowball — Spotify-primary) ===\n')
+  console.log('=== Covery Catalog Builder v5 (Deezer-only snowball) ===\n')
   loadCache()
 
   const catalog = loadExisting()
-  // Index existing entries by lowercase name for fast merge/update
   const byName = new Map(catalog.artists.map(a => [a.name.toLowerCase(), a]))
   console.log(`Loaded existing catalog: ${catalog.artists.length} artists\n`)
 
-  if (!CLIENT_ID || !CLIENT_SECRET) {
-    console.error('FATAL: Spotify credentials missing. Set SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET in .env')
-    return
-  }
-  let spotifyToken = await getSpotifyToken()
-  console.log('✓ Spotify token acquired\n')
-
-  // ── Seed queue from JP_ARTISTS (resolve to Spotify IDs) ──
   const seedNames = new Set(JP_ARTISTS)
-  const queue = []
+  const queue = []          // [{deezerId, displayName}]
   const seenIds = new Set()
+  const processed = new Set()
 
-  console.log(`── Resolving ${JP_ARTISTS.length} seed artists via Spotify search ──`)
+  // ── Seed queue via Deezer search ──
+  console.log(`── Deezer検索で ${JP_ARTISTS.length} 件の初期アーティストを解決 ──`)
   for (const name of JP_ARTISTS) {
-    const hit = await searchArtist(name, spotifyToken)
+    const hit = await deezerSearchArtist(name)
     if (hit && !seenIds.has(hit.id)) {
-      queue.push({ id: hit.id, displayName: name })
+      queue.push({ deezerId: hit.id, displayName: name })
       seenIds.add(hit.id)
     }
   }
-  console.log(`  → Queue seeded with ${queue.length} artists\n`)
+  console.log(`  → キュー開始: ${queue.length}件\n`)
 
   const MAX_ARTISTS = 5000
-  const processed = new Set()
-
   let processedCount = 0
   let newArtists = 0
   let newSongs = 0
   let updatedMeta = 0
 
-  // ── Snowball loop ──
   while (queue.length > 0 && processedCount < MAX_ARTISTS) {
-    const { id: spotifyId, displayName } = queue.shift()
-    if (processed.has(spotifyId)) continue
-    processed.add(spotifyId)
+    const { deezerId, displayName } = queue.shift()
+    if (processed.has(deezerId)) continue
+    processed.add(deezerId)
 
-    // Step 1: get artist detail
-    const detail = await getArtistDetail(spotifyId, spotifyToken)
-    if (!detail) continue
-    if (!isJapaneseArtist(detail, seedNames) && !seedNames.has(displayName)) {
-      // Skip non-Japanese artists (unless it's a seed we explicitly requested)
+    // Step 1: artist detail
+    const detail = await deezerGetArtistById(deezerId)
+    if (!detail || !detail.id) continue
+
+    // Display name: prefer seed name if match, else NAME_MAP, else Deezer's
+    const rawName = detail.name
+    const name = seedNames.has(displayName)
+      ? displayName
+      : (resolveJapaneseName(rawName) || rawName)
+
+    // Japanese check — skip non-Japanese unless explicitly seeded
+    if (!isJapaneseArtist({ name }, seedNames) && !seedNames.has(displayName)) {
       continue
     }
 
-    // Resolve display name: prefer seed name if we started with one, else Spotify name (with NAME_MAP)
-    const name = seedNames.has(displayName) ? displayName : resolveJapaneseName(detail.name) || detail.name
-    const imageUrl = detail.images?.[0]?.url || ''
-    const genre = mapGenre(detail.genres)
+    const imageUrl = detail.picture_xl || detail.picture_big || detail.picture_medium || detail.picture || ''
     const reading = generateReading(name)
+    const genre = await deezerResolveGenre(deezerId)
 
-    console.log(`[Step1] ${name} (画像: ${imageUrl ? 'あり' : 'なし'}, ジャンル: ${genre})`)
+    console.log(`[Deezer] ${name} (画像: ${imageUrl ? 'あり' : 'なし'}, ジャンル: ${genre})`)
 
     // Upsert into in-memory catalog
     let entry = byName.get(name.toLowerCase())
     if (!entry) {
-      entry = { name, reading, spotifyId, imageUrl, genre, songs: [] }
+      entry = { name, reading, deezerId, imageUrl, genre, songs: [] }
       catalog.artists.push(entry)
       byName.set(name.toLowerCase(), entry)
       newArtists++
     } else {
       if (!entry.imageUrl && imageUrl) entry.imageUrl = imageUrl
       if (!entry.genre && genre) entry.genre = genre
-      if (!entry.spotifyId) entry.spotifyId = spotifyId
+      if (!entry.deezerId) entry.deezerId = deezerId
       updatedMeta++
     }
 
-    // Step 2 + 3: albums + tracks
-    const albums = await getAllAlbums(spotifyId, spotifyToken)
-    console.log(`  [Step2] アルバム ${albums.length}枚取得`)
-
+    // Step 2+3: albums + tracks
+    const albums = await deezerGetAlbumsByArtist(deezerId)
     const existingTitles = new Set((entry.songs || []).map(s => s.title.toLowerCase()))
     let addedHere = 0
     let tracksFetched = 0
     for (const album of albums) {
-      const tracks = await getAlbumTracks(album.id, spotifyToken)
+      const tracks = await deezerGetAlbumTracks(album.id)
       tracksFetched += tracks.length
       for (const t of tracks) {
-        const title = (t.name || '').replace(/\s*-\s*.*$/, '').trim()
+        const title = (t.title || '').trim()
         if (!title) continue
         const lower = title.toLowerCase()
         if (existingTitles.has(lower)) continue
@@ -665,19 +605,19 @@ async function buildCatalog() {
       }
     }
     newSongs += addedHere
-    console.log(`  [Step3] ${tracksFetched}曲取得（新規${addedHere}曲）`)
+    console.log(`  [Deezer] アルバム ${albums.length}枚 → ${tracksFetched}曲取得（新規${addedHere}曲）`)
 
     // Step 4: related artists
-    const related = await getRelatedArtists(spotifyId, spotifyToken)
+    const related = await deezerGetRelatedArtists(deezerId)
     let queuedRelated = 0
     for (const r of related) {
       if (seenIds.has(r.id)) continue
-      if (!isJapaneseArtist(r)) continue
+      if (!isJapaneseArtist({ name: r.name }, seedNames)) continue
       seenIds.add(r.id)
-      queue.push({ id: r.id, displayName: resolveJapaneseName(r.name) || r.name })
+      queue.push({ deezerId: r.id, displayName: resolveJapaneseName(r.name) || r.name })
       queuedRelated++
     }
-    console.log(`  [Step4] 関連 ${related.length}組（うち日本 ${queuedRelated}組をキューに追加）`)
+    console.log(`  [Deezer] 関連アーティスト ${related.length}組（うち日本${queuedRelated}組）`)
 
     processedCount++
     const totalSongs = catalog.artists.reduce((n, a) => n + (a.songs?.length || 0), 0)
@@ -693,16 +633,7 @@ async function buildCatalog() {
       }
     }
 
-    // Small politeness delay
     await sleep(200)
-
-    // Refresh Spotify token every 100 artists (tokens last 1 hour)
-    if (processedCount % 100 === 0) {
-      try {
-        spotifyToken = await getSpotifyToken()
-        console.log('  🔑 Spotify token refreshed')
-      } catch (_) {}
-    }
   }
 
   // ── Final save + D1 sync ──
@@ -732,7 +663,7 @@ function syncToD1(catalog) {
     const artistsPayload = catalog.artists.map(a => ({
       name: a.name,
       reading: a.reading,
-      spotifyId: a.spotifyId || '',
+      spotifyId: a.spotifyId || '',  // kept for legacy rows
       imageUrl: a.imageUrl || '',
       genre: a.genre || '',
     }))
