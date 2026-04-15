@@ -33,13 +33,13 @@ function App() {
     window.scrollTo(0, 0)
   }, [activeTab])
 
-  const navigateToCovers = useCallback((songTitle) => {
-    setViewingSong(songTitle)
+  const navigateToCovers = useCallback((songTitle, songId = null) => {
+    setViewingSong({ title: songTitle, id: songId })
     pushAndNavigate('song-covers')
   }, [pushAndNavigate])
 
-  const navigateToArtist = useCallback((artistName) => {
-    setViewingArtist(artistName)
+  const navigateToArtist = useCallback((artistName, artistId = null) => {
+    setViewingArtist({ name: artistName, id: artistId })
     pushAndNavigate('artist-songs')
   }, [pushAndNavigate])
 
@@ -86,14 +86,16 @@ function App() {
           {activeTab === 'playlist' && <Library onNavigateToCovers={navigateToCovers} onNavigateToSinger={navigateToSinger} />}
           {activeTab === 'song-covers' && (
             <SongCovers
-              songTitle={viewingSong}
+              songTitle={viewingSong?.title || viewingSong}
+              songId={viewingSong?.id}
               onBack={goBack}
               onNavigateToSinger={navigateToSinger}
             />
           )}
           {activeTab === 'artist-songs' && (
             <ArtistSongs
-              artistName={viewingArtist}
+              artistName={viewingArtist?.name || viewingArtist}
+              artistId={viewingArtist?.id}
               onBack={goBack}
               onNavigateToCovers={navigateToCovers}
               onNavigateToSinger={navigateToSinger}

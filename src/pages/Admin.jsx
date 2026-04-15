@@ -3,6 +3,9 @@ import AdminChannelDetail, { StatusBadge } from "./AdminChannelDetail";
 import { useAdminStore } from "../store/useAdminStore";
 import { scanChannel, discoverNewChannels } from "../utils/channelScanner";
 import previewRawOriginal from "../data/previewChannels.json";
+import * as api from "../api/client";
+
+const TOKEN_KEY = "covery-admin-token";
 
 // ── Covery Host Admin Panel ──
 const ADMIN_CRED = {
@@ -177,7 +180,8 @@ const StatsCard = ({ label, value, color }) => (
 );
 
 export default function Admin() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || "");
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem(TOKEN_KEY));
   const [id1, setId1] = useState("");
   const [id2, setId2] = useState("");
   const [password, setPassword] = useState("");
@@ -216,7 +220,28 @@ export default function Admin() {
     if (!channels.length) initChannels(PREVIEW_CHANNELS);
   }, []);
 
-  const save = useCallback((d) => saveDecisions(d), [saveDecisions]);
+  const syncDecisionToAPI = useCallback(async (channelId, status) => {
+    if (!token) return;
+    try {
+      if (status === "approved") await api.approveChannel(token, channelId);
+      else if (status === "rejected") await api.rejectChannel(token, channelId);
+      else await api.resetChannel(token, channelId);
+    } catch (e) {
+      console.warn(`[Covery] API sync failed for ${channelId}:`, e.message);
+    }
+  }, [token]);
+
+  const save = useCallback((d) => {
+    // Diff against previous decisions and sync changes to API
+    const prev = decisions || {};
+    const allIds = new Set([...Object.keys(prev), ...Object.keys(d)]);
+    for (const id of allIds) {
+      const oldS = prev[id] || "pending";
+      const newS = d[id] || "pending";
+      if (oldS !== newS) syncDecisionToAPI(id, newS);
+    }
+    saveDecisions(d);
+  }, [saveDecisions, decisions, syncDecisionToAPI]);
 
   const pendingCount = useMemo(() => channels.filter(ch => !decisions[ch.channelId] || decisions[ch.channelId] === 'pending').length, [channels, decisions]);
 
@@ -242,10 +267,29 @@ export default function Admin() {
       });
   }, [pendingCount, autoReplenish, isLoggedIn]);
 
-  const handleLogin = () => {
-    if (id1.trim() === ADMIN_CRED.id1 && id2.trim() === ADMIN_CRED.id2 && password === ADMIN_CRED.password) {
-      setIsLoggedIn(true); setError("");
-    } else setError("ID またはパスワードが違います");
+  const handleLogin = async () => {
+    if (id1.trim() !== ADMIN_CRED.id1 || id2.trim() !== ADMIN_CRED.id2 || password !== ADMIN_CRED.password) {
+      setError("ID またはパスワードが違います");
+      return;
+    }
+    // Also fetch API token (optional — local login works even if API is down)
+    try {
+      const res = await api.adminLogin(password);
+      if (res?.token) {
+        setToken(res.token);
+        localStorage.setItem(TOKEN_KEY, res.token);
+      }
+    } catch (e) {
+      console.warn("[Covery] API login failed, using local-only mode:", e.message);
+    }
+    setIsLoggedIn(true);
+    setError("");
+  };
+
+  const handleLogout = () => {
+    setToken("");
+    localStorage.removeItem(TOKEN_KEY);
+    setIsLoggedIn(false);
   };
   const getStatus = (id) => decisions[id] || "pending";
 
@@ -255,6 +299,7 @@ export default function Admin() {
     try {
       const results = await scanChannel(ch.channelId, ch.channelName, (p) => updateScanProgress(ch.channelId, p));
       completeScan(ch.channelId, results);
+      syncDecisionToAPI(ch.channelId, "approved");
     } catch (e) {
       failScan(ch.channelId, e.message);
       setScanError(`${ch.channelName}: ${e.message === 'QUOTA_EXCEEDED' ? 'APIクォータ上限' : e.message}`);
@@ -323,7 +368,7 @@ export default function Admin() {
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
           <button onClick={exportList} style={{ padding: "8px 16px", borderRadius: "10px", border: "1px solid rgba(99,102,241,0.3)", background: "transparent", color: "#818cf8", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>承認リスト出力</button>
-          <button onClick={() => setIsLoggedIn(false)} style={{ padding: "8px 16px", borderRadius: "10px", border: "1px solid rgba(148,163,184,0.2)", background: "transparent", color: "#94a3b8", fontSize: "13px", cursor: "pointer" }}>ログアウト</button>
+          <button onClick={handleLogout} style={{ padding: "8px 16px", borderRadius: "10px", border: "1px solid rgba(148,163,184,0.2)", background: "transparent", color: "#94a3b8", fontSize: "13px", cursor: "pointer" }}>ログアウト</button>
         </div>
       </div>
 

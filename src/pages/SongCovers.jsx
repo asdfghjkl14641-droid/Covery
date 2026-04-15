@@ -1,19 +1,48 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { ArrowLeft, Play, Shuffle, Clock, ArrowUpDown, Dice5 } from 'lucide-react'
 import { usePlayerStore } from '../store/usePlayerStore'
 import { useAdminStore } from '../store/useAdminStore'
 import { getApprovedSongs } from '../utils/filterCovers'
+import { fetchSongCovers } from '../api/client'
+import data from '../data/metadata.json'
 
-const SongCovers = ({ songTitle, onBack, onNavigateToSinger }) => {
+const SongCovers = ({ songTitle, songId, onBack, onNavigateToSinger }) => {
   const { setQueue, currentTrack, isPlaying } = usePlayerStore()
   const approvedIds = useAdminStore(s => s.approvedIds)
   const devMode = useAdminStore(s => s.devMode)
   const scanResults = useAdminStore(s => s.scanResults)
   const [sortMode, setSortMode] = useState('random')
+  const [apiCovers, setApiCovers] = useState(null)
 
+  // Fetch from API if songId provided
+  useEffect(() => {
+    if (!songId) return
+    fetchSongCovers(songId).then(res => {
+      if (res?.covers?.length) {
+        console.log(`[Covery] API: ${res.covers.length} covers loaded for song ${songId}`)
+        // Convert API shape to local shape (same as getApprovedSongs)
+        const converted = res.covers.map((c, i) => ({
+          id: `api_${c.videoId}`,
+          title: res.song.title,
+          originalArtist: res.song.artistName,
+          singerName: c.channelName,
+          covers: [{
+            videoId: c.videoId,
+            singerId: c.channelId,
+            publishedAt: c.publishedAt || '',
+            thumbnailUrl: c.thumbnailUrl || `https://img.youtube.com/vi/${c.videoId}/hqdefault.jpg`,
+          }],
+        }))
+        setApiCovers(converted)
+      }
+    })
+  }, [songId])
+
+  // Prefer API data, fallback to JSON-based
   const covers = useMemo(() => {
+    if (apiCovers) return apiCovers
     return getApprovedSongs().filter(s => s.title === songTitle)
-  }, [songTitle, approvedIds, devMode, scanResults])
+  }, [apiCovers, songTitle, approvedIds, devMode, scanResults])
 
   const firstSong = covers[0] || {}
   const heroVideoId = covers[0]?.covers?.[0]?.videoId

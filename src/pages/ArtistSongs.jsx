@@ -1,18 +1,31 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { ArrowLeft, Play, Music, Radio } from 'lucide-react'
 import { usePlayerStore } from '../store/usePlayerStore'
 import { useAdminStore } from '../store/useAdminStore'
 import { getApprovedSongs } from '../utils/filterCovers'
+import { fetchArtistSongs } from '../api/client'
 import data from '../data/metadata.json'
 import catalog from '../data/songCatalog.json'
 import SongCard from '../components/Shared/SongCard'
 
-const ArtistSongs = ({ artistName, onBack, onNavigateToCovers, onNavigateToSinger }) => {
+const ArtistSongs = ({ artistName, artistId, onBack, onNavigateToCovers, onNavigateToSinger }) => {
   const { setQueue, startBGMMode } = usePlayerStore()
   const approvedIds = useAdminStore(s => s.approvedIds)
   const devMode = useAdminStore(s => s.devMode)
   const scanResults = useAdminStore(s => s.scanResults)
+  const [apiData, setApiData] = useState(null)
 
+  useEffect(() => {
+    if (!artistId) return
+    fetchArtistSongs(artistId).then(res => {
+      if (res?.songs?.length) {
+        console.log(`[Covery] API: ${res.songs.length} songs for artist ${artistId}`)
+        setApiData(res)
+      }
+    })
+  }, [artistId])
+
+  // Songs with covers: prefer JSON (has videoIds) but supplement with API
   const songs = useMemo(() =>
     getApprovedSongs().filter(s => s.originalArtist === artistName)
   , [artistName, approvedIds, devMode, scanResults])

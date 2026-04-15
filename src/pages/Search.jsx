@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react'
+import React, { useState, useRef, useMemo, useEffect } from 'react'
 import { Search as SearchIcon, X, ChevronRight } from 'lucide-react'
 import data from '../data/metadata.json'
 import catalog from '../data/songCatalog.json'
@@ -47,17 +47,36 @@ function getSectionLabel(key) {
 const Search = ({ onNavigateToCovers, onNavigateToArtist, onNavigateToSinger }) => {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(null)
+  const [apiArtists, setApiArtists] = useState(null)
   const sectionRefs = useRef({})
 
-  // Build artist list from catalog with reading
+  // Fetch artists from API (with JSON fallback)
+  useEffect(() => {
+    import('../api/client').then(async ({ fetchArtists }) => {
+      const res = await fetchArtists()
+      if (res?.artists?.length) {
+        console.log(`[Covery] API: ${res.artists.length} artists loaded`)
+        // Cross-reference catalog for imageUrl
+        const merged = res.artists.map(a => {
+          const catEntry = catalog.artists.find(c => c.name === a.name)
+          return { name: a.name, id: a.id, reading: a.reading || a.name, imageUrl: catEntry?.imageUrl || '', songCount: a.songCount }
+        })
+        setApiArtists(merged)
+      }
+    })
+  }, [])
+
+  // Artist list: prefer API, fallback to JSON catalog
   const artists = useMemo(() => {
+    if (apiArtists) return apiArtists
     return catalog.artists.map(a => ({
       name: a.name,
+      id: null,
       reading: a.reading || a.name,
       imageUrl: a.imageUrl || '',
       songCount: a.songs.length,
     }))
-  }, [])
+  }, [apiArtists])
 
   // Filter by query
   const filteredArtists = useMemo(() => {
@@ -227,7 +246,7 @@ const Search = ({ onNavigateToCovers, onNavigateToArtist, onNavigateToSinger }) 
               {artistList.map(artist => (
                 <div
                   key={artist.name}
-                  onClick={() => onNavigateToArtist && onNavigateToArtist(artist.name)}
+                  onClick={() => onNavigateToArtist && onNavigateToArtist(artist.name, artist.id)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '14px',
                     padding: '10px 8px', borderRadius: '10px', cursor: 'pointer',

@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { ArrowLeft, Play, Shuffle, Users, Ban } from 'lucide-react'
 import { usePlayerStore } from '../store/usePlayerStore'
 import { useAdminStore } from '../store/useAdminStore'
+import { fetchChannelCovers, fetchSimilarSingers } from '../api/client'
 import data from '../data/metadata.json'
 
 const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }) => {
@@ -10,7 +11,28 @@ const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }
   const devMode = useAdminStore(s => s.devMode)
   const isHidden = !devMode && approvedIds.size > 0 && !approvedIds.has(singerId)
 
-  const singer = (data?.singers || []).find(s => s.channelId === singerId)
+  const [apiCovers, setApiCovers] = useState(null)
+  const [apiSimilar, setApiSimilar] = useState(null)
+
+  useEffect(() => {
+    if (!singerId || isHidden) return
+    fetchChannelCovers(singerId).then(res => {
+      if (res?.covers?.length) {
+        console.log(`[Covery] API: ${res.covers.length} covers for channel ${singerId}`)
+        setApiCovers(res)
+      }
+    })
+    fetchSimilarSingers(singerId).then(res => {
+      if (res?.similar) {
+        console.log(`[Covery] API: ${res.similar.length} similar singers`)
+        setApiSimilar(res.similar)
+      }
+    })
+  }, [singerId, isHidden])
+
+  const singer = apiCovers?.channel
+    ? { channelId: apiCovers.channel.channelId, name: apiCovers.channel.channelName, thumbnailUrl: apiCovers.channel.thumbnailUrl }
+    : (data?.singers || []).find(s => s.channelId === singerId)
   const singerName = singer?.name || 'Unknown'
 
   if (isHidden) {
@@ -25,13 +47,33 @@ const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }
     )
   }
 
-  // All songs this singer covers
-  const songs = useMemo(() =>
-    (data?.songs || []).filter(s => s.covers.some(c => c.singerId === singerId))
-  , [singerId])
+  // All songs this singer covers — prefer API
+  const songs = useMemo(() => {
+    if (apiCovers?.covers?.length) {
+      return apiCovers.covers.map(c => ({
+        id: `api_${c.videoId}`,
+        title: c.songTitle,
+        originalArtist: c.artistName,
+        singerName,
+        covers: [{
+          videoId: c.videoId, singerId,
+          publishedAt: c.publishedAt || '',
+          thumbnailUrl: `https://img.youtube.com/vi/${c.videoId}/hqdefault.jpg`,
+        }],
+      }))
+    }
+    return (data?.songs || []).filter(s => s.covers.some(c => c.singerId === singerId))
+  }, [singerId, apiCovers, singerName])
 
-  // "似た歌い手" — Jaccard similarity
+  // "似た歌い手" — prefer API (Jaccard done server-side), fallback to local calc
   const similarSingers = useMemo(() => {
+    if (apiSimilar) {
+      return apiSimilar.map(s => ({
+        channelId: s.channelId, name: s.channelName, thumb: s.thumbnailUrl,
+        jaccard: s.jaccard / 100, overlapCount: s.overlapCount,
+      }))
+    }
+    // Local Jaccard fallback
     const myTitles = new Set(songs.map(s => s.title))
     const myCount = myTitles.size
     const otherTitles = new Map()
@@ -57,13 +99,13 @@ const SingerPage = ({ singerId, onBack, onNavigateToCovers, onNavigateToSinger }
       if (overlapCount === 0) continue
       const union = myCount + titles.size - overlapCount
       const jaccard = union > 0 ? overlapCount / union : 0
-      if (jaccard < 0.1) continue // 10%未満は除外
+      if (jaccard < 0.1) continue
       const info = otherInfo.get(cid)
       results.push({ channelId: cid, name: info.name, thumb: info.thumb, jaccard, overlapCount })
     }
 
     return results.sort((a, b) => b.jaccard - a.jaccard).slice(0, 10)
-  }, [singerId, songs])
+  }, [apiSimilar, singerId, songs, devMode, approvedIds])
 
   const buildTrack = (song) => {
     const cover = song.covers.find(c => c.singerId === singerId) || song.covers[0]
