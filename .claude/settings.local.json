@@ -42,7 +42,9 @@
       "Bash(curl -s \"https://covery-api.asdfghjkl14641.workers.dev/api/artists\")",
       "Bash(curl -s -X POST \"https://covery-api.asdfghjkl14641.workers.dev/api/admin/login\" -H \"Content-Type: application/json\" -d '{\"password\":\"covery2026\"}')",
       "Bash(npm run:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)"
     ]
   }
 }

@@ -220,6 +220,43 @@ export default function Admin() {
     if (!channels.length) initChannels(PREVIEW_CHANNELS);
   }, []);
 
+  // One-time migration: sync localStorage decisions to D1
+  useEffect(() => {
+    if (!token || !isLoggedIn) return;
+    if (localStorage.getItem('covery-d1-migration-done') === 'true') return;
+
+    const raw = localStorage.getItem('covery-channel-decisions');
+    if (!raw) {
+      localStorage.setItem('covery-d1-migration-done', 'true');
+      return;
+    }
+
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { return; }
+    if (!parsed || typeof parsed !== 'object') return;
+
+    const entries = Object.entries(parsed).filter(([, v]) => v === 'approved' || v === 'rejected');
+    if (entries.length === 0) {
+      localStorage.setItem('covery-d1-migration-done', 'true');
+      return;
+    }
+
+    console.log(`[Covery] Migrating ${entries.length} local decisions to D1...`);
+    (async () => {
+      let approved = 0, rejected = 0;
+      for (const [channelId, status] of entries) {
+        try {
+          if (status === 'approved') { await api.approveChannel(token, channelId); approved++; }
+          else if (status === 'rejected') { await api.rejectChannel(token, channelId); rejected++; }
+        } catch (e) {
+          console.warn(`[Covery] Migration skip ${channelId}:`, e.message);
+        }
+      }
+      console.log(`[Covery] ${approved}件の承認、${rejected}件の拒否をD1に同期しました`);
+      localStorage.setItem('covery-d1-migration-done', 'true');
+    })();
+  }, [token, isLoggedIn]);
+
   const syncDecisionToAPI = useCallback(async (channelId, status) => {
     if (!token) return;
     try {
