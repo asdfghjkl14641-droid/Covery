@@ -69,10 +69,11 @@ export async function scanChannel(channelId, channelName, onProgress = () => {})
 
       const videoId = item.id.videoId
 
-      // Match to catalog (strict)
+      // Match to catalog (strict) — skip if no match
       const match = findCatalogMatch(title)
-      const matchedTitle = match ? match.title : title
-      const matchedArtist = match ? match.artist : '不明'
+      if (!match) continue
+      const matchedTitle = match.title
+      const matchedArtist = match.artist
 
       covers.push({
         videoId,

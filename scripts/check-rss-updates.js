@@ -118,10 +118,11 @@ async function checkRssUpdates() {
         if (entry.includes('/shorts/')) continue
         if (!['歌ってみた', 'cover', 'カバー'].some(k => lower.includes(k))) continue
 
-        // Match to catalog (strict)
+        // Match to catalog (strict) — skip if no match
         const match = findBestMatch(title, catalogEntries)
-        const matchedTitle = match ? match.title : title
-        const matchedArtist = match ? match.artist : '不明'
+        if (!match) continue // カタログにない曲は追加しない
+        const matchedTitle = match.title
+        const matchedArtist = match.artist
 
         const channelName = extractTag(entry, 'name')[0] || singersMap.get(channelId)?.name || 'Unknown'
 

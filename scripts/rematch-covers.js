@@ -1,96 +1,67 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { matchSongTitle } from './matchSong.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const METADATA_FILE = path.join(__dirname, '../src/data/metadata.json')
-const CACHE_FILE = path.join(__dirname, '../src/data/apiCache.json')
 const CATALOG_FILE = path.join(__dirname, '../src/data/songCatalog.json')
 
-console.log('=== Covery Cover Re-matcher ===\n')
+console.log('=== Covery Re-matcher: Spotify名に統一 ===\n')
 
 const metadata = JSON.parse(fs.readFileSync(METADATA_FILE, 'utf8'))
 const catalog = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf8'))
 
-// Load apiCache for original video titles
-let cache = { youtubeSearches: {} }
-try { cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) } catch {}
-
-// Build video title lookup from cache
-const videoTitleMap = new Map()
-for (const [, entry] of Object.entries(cache.youtubeSearches || {})) {
-  if (entry?.data && Array.isArray(entry.data)) {
-    for (const item of entry.data) {
-      const vid = item.id?.videoId || item.videoId
-      const title = item.snippet?.title
-      if (vid && title) videoTitleMap.set(vid, title)
-    }
+// Build catalog: title → set of valid artists
+const catalogTitles = new Set()
+const titleToArtists = new Map() // title → Set of artist names
+for (const artist of catalog.artists) {
+  for (const song of artist.songs) {
+    catalogTitles.add(song.title)
+    if (!titleToArtists.has(song.title)) titleToArtists.set(song.title, new Set())
+    titleToArtists.get(song.title).add(artist.name)
   }
 }
-console.log(`キャッシュから動画タイトル: ${videoTitleMap.size}件\n`)
 
-const beforeSongs = metadata.songs.length
-let removed = 0
-let kept = 0
-const removedExamples = []
+const beforeCount = metadata.songs.length
+let removedNotInCatalog = 0
+let fixedArtist = 0
 
-// For each song, check if its covers actually match the claimed title
-const newSongs = []
+// 1. Remove songs not in catalog
+metadata.songs = metadata.songs.filter(song => {
+  if (catalogTitles.has(song.title)) return true
+  removedNotInCatalog++
+  console.log(`  除外: "${song.title}" (${song.originalArtist}) — カタログに存在しない`)
+  return false
+})
+
+// 2. Fix artist names — only if current artist is NOT valid for this title
 for (const song of metadata.songs) {
-  const validCovers = []
-
-  for (const cover of song.covers) {
-    const cachedTitle = videoTitleMap.get(cover.videoId)
-
-    if (!cachedTitle) {
-      // No cached title — keep it (can't verify)
-      validCovers.push(cover)
-      kept++
-      continue
-    }
-
-    // Re-match using strict logic
-    if (matchSongTitle(cachedTitle, song.title, song.originalArtist)) {
-      validCovers.push(cover)
-      kept++
-    } else {
-      removed++
-      if (removedExamples.length < 20) {
-        removedExamples.push(`  "${cachedTitle}" was tagged as "${song.title}" (${song.originalArtist}) → REMOVED`)
-      }
-    }
+  const validArtists = titleToArtists.get(song.title)
+  if (!validArtists) continue
+  if (validArtists.has(song.originalArtist)) continue // Already correct
+  if (song.originalArtist === '不明' && validArtists.size === 1) {
+    const correct = [...validArtists][0]
+    console.log(`  アーティスト修正: "${song.title}" 不明 → ${correct}`)
+    song.originalArtist = correct
+    fixedArtist++
   }
-
-  if (validCovers.length > 0) {
-    newSongs.push({ ...song, covers: validCovers })
-  }
+  // If multiple artists have this title, keep current (was set at search time with artist context)
 }
 
-metadata.songs = newSongs
-
-// Rebuild singers
-const activeSingerIds = new Set()
-metadata.songs.forEach(s => s.covers.forEach(c => activeSingerIds.add(c.singerId)))
-metadata.singers = metadata.singers.filter(s => activeSingerIds.has(s.channelId))
+// 3. Rebuild singers
+const activeIds = new Set()
+metadata.songs.forEach(s => s.covers.forEach(c => activeIds.add(c.singerId)))
+const beforeSingers = metadata.singers.length
+metadata.singers = metadata.singers.filter(s => activeIds.has(s.channelId))
 
 fs.writeFileSync(METADATA_FILE, JSON.stringify(metadata, null, 2))
 
-console.log(`再マッチング前: ${beforeSongs}曲`)
-console.log(`正当なカバー: ${kept}件`)
-console.log(`誤マッチ除外: ${removed}件`)
-console.log(`再マッチング後: ${metadata.songs.length}曲`)
-console.log(`歌い手: ${metadata.singers.length}人`)
+console.log(`\n=== 結果 ===`)
+console.log(`曲: ${beforeCount} → ${metadata.songs.length} (${removedNotInCatalog}件除外)`)
+console.log(`アーティスト名修正: ${fixedArtist}件`)
+console.log(`歌い手: ${beforeSingers} → ${metadata.singers.length}`)
 
-if (removedExamples.length > 0) {
-  console.log(`\n除外例:`)
-  removedExamples.forEach(e => console.log(e))
-}
-
-// Show problem titles stats
-const titleCounts = new Map()
-metadata.songs.forEach(s => titleCounts.set(s.title, (titleCounts.get(s.title) || 0) + 1))
-const top = [...titleCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
-console.log('\nカバー数TOP10:')
-top.forEach(([t, c]) => console.log(`  ${t}: ${c}件`))
+// Verify: no unknown artists remain
+const unknowns = metadata.songs.filter(s => s.originalArtist === '不明')
+console.log(`アーティスト不明: ${unknowns.length}件`)
