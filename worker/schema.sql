@@ -5,6 +5,8 @@ CREATE TABLE artists (
   name TEXT NOT NULL UNIQUE,
   spotify_id TEXT,
   reading TEXT,
+  image_url TEXT DEFAULT '',
+  genre TEXT DEFAULT '',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

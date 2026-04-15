@@ -80,9 +80,25 @@ function batchInsertArtists(artists) {
   const stmts = artists.map(a => {
     const name = esc(a.name);
     const reading = esc(a.reading || '');
-    return `INSERT OR IGNORE INTO artists (name, reading) VALUES ('${name}', '${reading}')`;
+    const spotifyId = esc(a.spotifyId || '');
+    const imageUrl = esc(a.imageUrl || '');
+    const genre = esc(a.genre || '');
+    return `INSERT OR IGNORE INTO artists (name, reading, spotify_id, image_url, genre) VALUES ('${name}', '${reading}', '${spotifyId}', '${imageUrl}', '${genre}')`;
   });
   return batchExecute(stmts, 'artists');
+}
+
+// ── Update metadata for existing artists (image_url + genre only) ──
+// Only fills empty columns to preserve manual edits.
+function batchUpdateArtistMeta(artists) {
+  const stmts = artists.map(a => {
+    const name = esc(a.name);
+    const imageUrl = esc(a.imageUrl || '');
+    const genre = esc(a.genre || '');
+    const spotifyId = esc(a.spotifyId || '');
+    return `UPDATE artists SET image_url = CASE WHEN IFNULL(image_url,'')='' THEN '${imageUrl}' ELSE image_url END, genre = CASE WHEN IFNULL(genre,'')='' THEN '${genre}' ELSE genre END, spotify_id = CASE WHEN IFNULL(spotify_id,'')='' THEN '${spotifyId}' ELSE spotify_id END WHERE name = '${name}'`;
+  });
+  return batchExecute(stmts, 'artist-meta');
 }
 
 // ── Songs ──
@@ -91,7 +107,8 @@ function batchInsertSongs(songs) {
     const title = esc(s.title);
     const artist = esc(s.artistName);
     const rank = parseInt(s.deezerRank || 0, 10) || 0;
-    return `INSERT OR IGNORE INTO songs (title, artist_id, deezer_rank) VALUES ('${title}', (SELECT id FROM artists WHERE name = '${artist}'), ${rank})`;
+    const genre = esc(s.genre || '');
+    return `INSERT OR IGNORE INTO songs (title, artist_id, deezer_rank, genre) VALUES ('${title}', (SELECT id FROM artists WHERE name = '${artist}'), ${rank}, '${genre}')`;
   });
   return batchExecute(stmts, 'songs');
 }
@@ -141,6 +158,7 @@ export {
   batchExecute,
   esc as escape,
   batchInsertArtists,
+  batchUpdateArtistMeta,
   batchInsertSongs,
   batchInsertChannels,
   batchInsertCovers,
@@ -153,6 +171,7 @@ export default {
   batchExecute,
   escape: esc,
   batchInsertArtists,
+  batchUpdateArtistMeta,
   batchInsertSongs,
   batchInsertChannels,
   batchInsertCovers,
