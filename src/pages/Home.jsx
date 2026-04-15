@@ -47,7 +47,9 @@ const Home = ({ onNavigateToCovers, onNavigateToSinger }) => {
               channelName: first.channelName,
               channelId: first.channelId,
               publishedAt: first.publishedAt || '',
-              thumbnailUrl: first.thumbnailUrl || `https://img.youtube.com/vi/${first.videoId}/hqdefault.jpg`,
+              // Always use YouTube video thumbnail for song cards (not channel icon)
+              thumbnailUrl: `https://img.youtube.com/vi/${first.videoId}/hqdefault.jpg`,
+              channelThumb: first.thumbnailUrl || '',
             }
           } catch (_) {}
         }))
