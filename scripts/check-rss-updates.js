@@ -86,6 +86,7 @@ async function checkRssUpdates() {
   let addedTotal = 0
   let checked = 0
   let errors = 0
+  const newCovers = []  // for D1 sync
 
   for (const channelId of approvedIds) {
     const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`
@@ -145,6 +146,10 @@ async function checkRssUpdates() {
           }]
         })
         existingVideoIds.add(videoId)
+        newCovers.push({
+          videoId, songTitle: matchedTitle, artistName: matchedArtist,
+          channelId, youtubeTitle: title, publishedAt: published.split('T')[0],
+        })
         addedTotal++
       }
     } catch {
@@ -162,6 +167,21 @@ async function checkRssUpdates() {
   fs.writeFileSync(LAST_CHECK_FILE, JSON.stringify({
     lastCheck: new Date().toISOString()
   }, null, 2))
+
+  // Sync newly-discovered covers to D1
+  if (newCovers.length > 0) {
+    try {
+      const db = require('./db')
+      if (db.isAvailable()) {
+        console.log(`\n[D1] Syncing ${newCovers.length} new covers to D1 ...`)
+        db.batchInsertCovers(newCovers)
+      } else {
+        console.log('[D1] skipped (wrangler not available or COVERY_SKIP_D1=1)')
+      }
+    } catch (e) {
+      console.error('[D1] sync failed:', e.message)
+    }
+  }
 
   console.log(`=== 完了 ===`)
   console.log(`チェック済み: ${checked}チャンネル`)

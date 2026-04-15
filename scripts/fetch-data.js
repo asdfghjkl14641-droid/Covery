@@ -150,6 +150,34 @@ async function fetchData() {
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(finalData, null, 2))
   saveCache()
 
+  // Sync to D1 (channels + covers)
+  try {
+    const db = require('./db')
+    if (db.isAvailable()) {
+      console.log('\n[D1] Syncing fetched covers to D1 ...')
+      const channels = [...singersMap.values()].map(s => ({
+        channelId: s.channelId, channelName: s.name, thumbnailUrl: s.thumbnailUrl || '',
+      }))
+      db.batchInsertChannels(channels, 'approved')
+
+      const covers = []
+      for (const song of songsList) {
+        for (const c of (song.covers || [])) {
+          covers.push({
+            videoId: c.videoId, songTitle: song.title, artistName: song.originalArtist,
+            channelId: c.singerId, publishedAt: c.publishedAt || '',
+          })
+        }
+      }
+      db.batchInsertCovers(covers)
+      console.log(`[D1] synced: ${channels.length} channels, ${covers.length} covers`)
+    } else {
+      console.log('[D1] skipped (wrangler not available or COVERY_SKIP_D1=1)')
+    }
+  } catch (e) {
+    console.error('[D1] sync failed:', e.message)
+  }
+
   console.log(`\n=== 完了 ===`)
   console.log(`Covers: ${songsList.length} (+${addedTotal})`)
   console.log(`Singers: ${finalData.singers.length}`)

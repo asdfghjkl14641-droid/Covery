@@ -380,10 +380,33 @@ async function buildCatalog() {
   }
 
   // ════════════════════════════════════════
-  //  Final save
+  //  Final save (JSON backup + D1 sync)
   // ════════════════════════════════════════
   saveCatalog(catalog)
   saveCache()
+
+  // Sync to D1
+  try {
+    const db = require('./db')
+    if (db.isAvailable()) {
+      console.log('\n[D1] Syncing catalog to D1 ...')
+      const artists = catalog.artists.map(a => ({ name: a.name, reading: a.reading }))
+      db.batchInsertArtists(artists)
+
+      const songs = []
+      for (const a of catalog.artists) {
+        for (const s of (a.songs || [])) {
+          songs.push({ title: s.title, artistName: a.name, deezerRank: s.deezerRank || 0 })
+        }
+      }
+      db.batchInsertSongs(songs)
+      console.log(`[D1] synced: ${artists.length} artists, ${songs.length} songs`)
+    } else {
+      console.log('[D1] skipped (wrangler not available or COVERY_SKIP_D1=1)')
+    }
+  } catch (e) {
+    console.error('[D1] sync failed:', e.message)
+  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
   let totalSongs = 0, jpCount = 0, enCount = 0

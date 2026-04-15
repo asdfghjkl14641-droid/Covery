@@ -156,6 +156,24 @@ async function fetchPreview() {
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(result, null, 2))
   saveCache()
 
+  // Sync preview channels to D1 as pending
+  try {
+    const db = require('./db')
+    if (db.isAvailable()) {
+      console.log('\n[D1] Syncing preview channels to D1 (status=pending) ...')
+      const channels = result.channels.map(c => ({
+        channelId: c.channelId, channelName: c.channelName,
+        thumbnailUrl: c.thumbnailUrl || '', subscriberCount: c.subscriberCount || 0,
+      }))
+      db.batchInsertChannels(channels, 'pending')
+      console.log(`[D1] synced: ${channels.length} preview channels`)
+    } else {
+      console.log('[D1] skipped (wrangler not available or COVERY_SKIP_D1=1)')
+    }
+  } catch (e) {
+    console.error('[D1] sync failed:', e.message)
+  }
+
   console.log(`\n=== 完了 ===`)
   console.log(`チャンネル: ${result.channels.length}`)
   console.log(`API検索: ${searchCount}`)

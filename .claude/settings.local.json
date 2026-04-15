@@ -44,7 +44,12 @@
       "Bash(npm run:*)",
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(node -c scripts/db.js)",
+      "Bash(node -c scripts/build-catalog.js)",
+      "Bash(node -c scripts/fetch-data.js)",
+      "Bash(node -c scripts/fetch-preview.js)",
+      "Bash(node -c scripts/check-rss-updates.js)"
     ]
   }
 }
