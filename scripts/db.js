@@ -51,7 +51,10 @@ function executeSQLFile(filePath) {
     );
     return result;
   } catch (error) {
-    console.error('[D1] SQL file execute failed:', error.message?.slice(0, 200));
+    console.error('[D1] SQL file execute failed:');
+    console.error('  stdout:', (error.stdout || '').toString().slice(0, 500) || 'none');
+    console.error('  stderr:', (error.stderr || '').toString().slice(0, 500) || 'none');
+    try { console.error('  SQL first 500 chars:', fs.readFileSync(filePath, 'utf-8').slice(0, 500)); } catch (_) {}
     return null;
   }
 }
@@ -60,6 +63,8 @@ function executeSQLFile(filePath) {
 function batchExecute(statements, label = 'batch') {
   if (!statements || statements.length === 0) return 0;
   let ok = 0;
+  let consecutiveFailures = 0;
+  const totalBatches = Math.ceil(statements.length / BATCH_SIZE);
   for (let i = 0; i < statements.length; i += BATCH_SIZE) {
     const chunk = statements.slice(i, i + BATCH_SIZE);
     const body = chunk.map(s => s.endsWith(';') ? s : s + ';').join('\n');
@@ -69,7 +74,15 @@ function batchExecute(statements, label = 'batch') {
     try { fs.unlinkSync(tmp); } catch (_) {}
     if (res !== null) {
       ok += chunk.length;
-      console.log(`[D1] ${label} batch ${Math.floor(i / BATCH_SIZE) + 1}: ${chunk.length} statements`);
+      consecutiveFailures = 0;
+      console.log(`[D1] ${label} batch ${Math.floor(i / BATCH_SIZE) + 1}/${totalBatches}: ${chunk.length} ok`);
+    } else {
+      consecutiveFailures++;
+      console.error(`[D1] ${label} batch ${Math.floor(i / BATCH_SIZE) + 1}/${totalBatches}: FAILED (${consecutiveFailures}/3)`);
+      if (consecutiveFailures >= 3) {
+        console.error(`[D1] ABORT "${label}": 3 consecutive failures. Stopping to preserve D1 quota.`);
+        break;
+      }
     }
   }
   return ok;

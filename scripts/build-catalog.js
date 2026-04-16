@@ -18,6 +18,40 @@ const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 // ══════════════════════════════════════════════════════════
+//  TIME LIMIT
+// ══════════════════════════════════════════════════════════
+const TIME_LIMIT_MS = (parseInt(process.env.TIME_LIMIT_MINUTES || '5', 10)) * 60 * 1000
+let BUILD_START_TIME = 0
+function isTimeUp() { return (Date.now() - BUILD_START_TIME) >= TIME_LIMIT_MS }
+function elapsedStr() {
+  const s = Math.floor((Date.now() - BUILD_START_TIME) / 1000)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} / ${Math.floor(TIME_LIMIT_MS / 60000)}:00`
+}
+
+// ══════════════════════════════════════════════════════════
+//  PROCESSED ARTISTS LOG (persistent skip list)
+// ══════════════════════════════════════════════════════════
+const PROCESSED_LOG_PATH = path.join(__dirname, 'logs', 'processed-artists.json')
+
+function loadProcessedLog() {
+  try {
+    if (fs.existsSync(PROCESSED_LOG_PATH)) return JSON.parse(fs.readFileSync(PROCESSED_LOG_PATH, 'utf8')).processed || []
+  } catch (_) {}
+  return []
+}
+
+function saveProcessedLog(entries) {
+  const dir = path.dirname(PROCESSED_LOG_PATH)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(PROCESSED_LOG_PATH, JSON.stringify({ processed: entries }, null, 2))
+}
+
+function appendProcessedArtist(entries, name, deezerId, songCount) {
+  entries.push({ name, deezerId, processedAt: new Date().toISOString(), songCount })
+  saveProcessedLog(entries)
+}
+
+// ══════════════════════════════════════════════════════════
 //  HARDCODED JAPANESE ARTIST LIST (200+ artists)
 //  These are searched directly on Deezer with Japanese names
 // ══════════════════════════════════════════════════════════
@@ -385,37 +419,21 @@ function saveCatalog(catalog) {
 
 // Deezer genre → 日本語カテゴリ (album.genres[].name.toLowerCase() で照合)
 const GENRE_MAP = {
-  'j-pop': 'J-POP',
-  'pop': 'J-POP',
-  'j-rock': '邦ロック',
-  'rock': '邦ロック',
+  'j-pop': 'J-POP', 'pop': 'J-POP', 'ポップ': 'J-POP', 'asian music': 'J-POP', 'アジア': 'J-POP',
+  'j-rock': '邦ロック', 'rock': '邦ロック', 'ロック': '邦ロック',
   'alternative': 'オルタナティブ',
-  'anime': 'アニソン',
-  'rap/hip hop': 'ヒップホップ',
-  'hip hop': 'ヒップホップ',
-  'r&b': 'R&B',
-  'electro': 'エレクトロ',
-  'metal': 'メタル',
-  'jazz': 'ジャズ',
-  'classical': 'クラシック',
-  'reggae': 'レゲエ',
-  'folk': 'フォーク',
-  'asian music': 'J-POP',
-  'korean pop': 'K-POP',
-  'k-pop': 'K-POP',
-  'films/games': 'サウンドトラック',
-  'soundtrack': 'サウンドトラック',
-  'kids': 'キッズ',
-  'latin music': 'ラテン',
-  'african music': 'アフリカ',
-  'dance': 'ダンス',
-  'soul & funk': 'ソウル',
-  'soul': 'ソウル',
-  'funk': 'ファンク',
-  'blues': 'ブルース',
-  'country': 'カントリー',
-  'enka': '演歌',
+  'anime': 'アニソン', 'アニメ': 'アニソン',
+  'rap/hip hop': 'ヒップホップ', 'hip hop': 'ヒップホップ', 'ヒップホップ': 'ヒップホップ',
+  'r&b': 'R&B', 'electro': 'エレクトロ',
+  'metal': 'メタル', 'メタル': 'メタル',
+  'jazz': 'ジャズ', 'classical': 'クラシック', 'reggae': 'レゲエ', 'folk': 'フォーク',
+  'korean pop': 'K-POP', 'k-pop': 'K-POP',
+  'films/games': 'サウンドトラック', 'soundtrack': 'サウンドトラック', '映画': 'サウンドトラック',
+  'kids': 'キッズ', 'dance': 'ダンス',
+  'soul & funk': 'ソウル', 'soul': 'ソウル', 'blues': 'ブルース',
+  'enka': '演歌', '演歌': '演歌',
 }
+const SOUNDTRACK_GENRES = new Set(['サウンドトラック', 'キッズ'])
 
 function mapGenre(name) {
   if (!name) return 'J-POP'
@@ -492,6 +510,16 @@ async function deezerGetAlbumDetail(albumId) {
   return data
 }
 
+async function deezerGetLatestAlbumDate(deezerId) {
+  const cacheKey = `dz_albums_latest_${deezerId}`
+  const cached = getCached('deezerAlbumsLatest', cacheKey)
+  if (cached) return cached
+  const data = await deezerJSON(`https://api.deezer.com/artist/${deezerId}/albums?order=RELEASE_DATE_DESC&limit=1`)
+  const date = data?.data?.[0]?.release_date || '0000-00-00'
+  setCache('deezerAlbumsLatest', cacheKey, date)
+  return date
+}
+
 async function deezerGetRelatedArtists(deezerId) {
   const cacheKey = `dz_related_${deezerId}`
   const cached = getCached('deezerRelated', cacheKey)
@@ -502,43 +530,88 @@ async function deezerGetRelatedArtists(deezerId) {
   return related
 }
 
-// Derive genre by looking at the artist's first album
-async function deezerResolveGenre(deezerId) {
-  const albums = await deezerGetAlbumsByArtist(deezerId)
-  if (albums.length === 0) return 'J-POP'
-  const album = await deezerGetAlbumDetail(albums[0].id)
-  const gArr = album?.genres?.data || []
-  if (gArr.length === 0) return 'J-POP'
-  return mapGenre(gArr[0].name)
+// Derive genre from up to 3 newest albums (skip soundtracks)
+async function deezerResolveGenre(deezerId, albums) {
+  const candidates = [...(albums || [])]
+    .filter(a => a.release_date && (a.record_type === 'album' || a.record_type === 'ep'))
+    .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
+    .slice(0, 3)
+  if (candidates.length === 0 && albums?.length > 0) candidates.push(albums[0])
+  if (candidates.length === 0) return 'J-POP'
+
+  const genreCounts = {}
+  for (const alb of candidates) {
+    const detail = await deezerGetAlbumDetail(alb.id)
+    for (const g of (detail?.genres?.data || [])) {
+      const mapped = mapGenre(g.name)
+      if (!SOUNDTRACK_GENRES.has(mapped)) genreCounts[mapped] = (genreCounts[mapped] || 0) + 1
+    }
+  }
+  const sorted = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])
+  return sorted.length > 0 ? sorted[0][0] : 'J-POP'
 }
 
 // ══════════════════════════════════════════════════════════
 //  MAIN (Deezer-only snowball)
 // ══════════════════════════════════════════════════════════
 async function buildCatalog() {
-  const startTime = Date.now()
-  console.log('=== Covery Catalog Builder v5 (Deezer-only snowball) ===\n')
+  BUILD_START_TIME = Date.now()
+  const limitMin = Math.floor(TIME_LIMIT_MS / 60000)
+  console.log(`=== Covery Catalog Builder v6 (skip + sort + time-limit) ===`)
+  console.log(`[制限時間] ${limitMin}分\n`)
   loadCache()
 
   const catalog = loadExisting()
   const byName = new Map(catalog.artists.map(a => [a.name.toLowerCase(), a]))
-  console.log(`Loaded existing catalog: ${catalog.artists.length} artists\n`)
+  console.log(`既存カタログ: ${catalog.artists.length}アーティスト`)
+
+  // ── B: Load processed artists log ──
+  const processedLog = loadProcessedLog()
+  const processedNames = new Set(processedLog.map(p => p.name.toLowerCase()))
+  console.log(`処理済みログ: ${processedLog.length}件ロード\n`)
 
   const seedNames = new Set(JP_ARTISTS)
-  const queue = []          // [{deezerId, displayName}]
+  const queue = []
   const seenIds = new Set()
   const processed = new Set()
+  const releaseDates = new Map() // deezerId → date string
 
-  // ── Seed queue via Deezer search ──
-  console.log(`── Deezer検索で ${JP_ARTISTS.length} 件の初期アーティストを解決 ──`)
+  // ── Seed queue via Deezer search (skip processed) ──
+  console.log(`── シード解決 (${JP_ARTISTS.length}件) ──`)
+  let seedSkipped = 0
   for (const name of JP_ARTISTS) {
+    if (isTimeUp()) break
+    if (processedNames.has(name.toLowerCase())) { seedSkipped++; continue }
     const hit = await deezerSearchArtist(name)
     if (hit && !seenIds.has(hit.id)) {
       queue.push({ deezerId: hit.id, displayName: name })
       seenIds.add(hit.id)
     }
   }
-  console.log(`  → キュー開始: ${queue.length}件\n`)
+  if (seedSkipped > 0) console.log(`  [スキップ] ${seedSkipped}組 (処理済み)`)
+  console.log(`  → キュー: ${queue.length}件 [${elapsedStr()}]\n`)
+
+  // ── C: Pre-scoring — fetch latest album dates for priority sort ──
+  console.log(`[事前スコアリング] ${queue.length}artist の最新アルバム日取得中...`)
+  for (const item of queue) {
+    if (isTimeUp()) break
+    try {
+      const date = await deezerGetLatestAlbumDate(item.deezerId)
+      releaseDates.set(item.deezerId, date)
+    } catch (_) {
+      releaseDates.set(item.deezerId, '0000-00-00')
+    }
+  }
+
+  // Sort queue by release_date DESC
+  queue.sort((a, b) => (releaseDates.get(b.deezerId) || '0000-00-00').localeCompare(releaseDates.get(a.deezerId) || '0000-00-00'))
+
+  console.log(`[完了] ${elapsedStr()} (${releaseDates.size}件)`)
+  console.log(`[ソート] 最新アルバム日降順`)
+  for (let i = 0; i < Math.min(10, queue.length); i++) {
+    console.log(`  ${i + 1}. ${queue[i].displayName}: ${releaseDates.get(queue[i].deezerId) || '?'}`)
+  }
+  console.log('')
 
   const MAX_ARTISTS = 5000
   let processedCount = 0
@@ -547,6 +620,8 @@ async function buildCatalog() {
   let updatedMeta = 0
 
   while (queue.length > 0 && processedCount < MAX_ARTISTS) {
+    if (isTimeUp()) { console.log(`\n[時間切れ] ${elapsedStr()}`); break }
+
     const { deezerId, displayName } = queue.shift()
     if (processed.has(deezerId)) continue
     processed.add(deezerId)
@@ -555,24 +630,27 @@ async function buildCatalog() {
     const detail = await deezerGetArtistById(deezerId)
     if (!detail || !detail.id) continue
 
-    // Display name: prefer seed name if match, else NAME_MAP, else Deezer's
     const rawName = detail.name
     const name = seedNames.has(displayName)
       ? displayName
       : (resolveJapaneseName(rawName) || rawName)
 
-    // Japanese check — skip non-Japanese unless explicitly seeded
-    if (!isJapaneseArtist({ name }, seedNames) && !seedNames.has(displayName)) {
-      continue
-    }
+    // Skip already processed (may come from related artists)
+    if (processedNames.has(name.toLowerCase())) continue
+
+    // Japanese check
+    if (!isJapaneseArtist({ name }, seedNames) && !seedNames.has(displayName)) continue
 
     const imageUrl = detail.picture_xl || detail.picture_big || detail.picture_medium || detail.picture || ''
     const reading = generateReading(name)
-    const genre = await deezerResolveGenre(deezerId)
 
-    console.log(`[Deezer] ${name} (画像: ${imageUrl ? 'あり' : 'なし'}, ジャンル: ${genre})`)
+    // Step 2+3: albums + tracks
+    const albums = await deezerGetAlbumsByArtist(deezerId)
 
-    // Upsert into in-memory catalog
+    // Genre from multi-album (skip soundtracks)
+    const genre = await deezerResolveGenre(deezerId, albums)
+
+    // Upsert into catalog
     let entry = byName.get(name.toLowerCase())
     if (!entry) {
       entry = { name, reading, deezerId, imageUrl, genre, songs: [] }
@@ -580,82 +658,93 @@ async function buildCatalog() {
       byName.set(name.toLowerCase(), entry)
       newArtists++
     } else {
-      if (!entry.imageUrl && imageUrl) entry.imageUrl = imageUrl
-      if (!entry.genre && genre) entry.genre = genre
+      if (imageUrl) entry.imageUrl = imageUrl
+      if (genre && genre !== 'J-POP') entry.genre = genre
       if (!entry.deezerId) entry.deezerId = deezerId
       updatedMeta++
     }
 
-    // Step 2+3: albums + tracks
-    const albums = await deezerGetAlbumsByArtist(deezerId)
     const existingTitles = new Set((entry.songs || []).map(s => s.title.toLowerCase()))
     let addedHere = 0
     let tracksFetched = 0
     for (const album of albums) {
+      if (isTimeUp()) break
       const tracks = await deezerGetAlbumTracks(album.id)
       tracksFetched += tracks.length
       for (const t of tracks) {
         const title = (t.title || '').trim()
         if (!title) continue
-        const lower = title.toLowerCase()
-        if (existingTitles.has(lower)) continue
-        existingTitles.add(lower)
-        entry.songs.push({ title, deezerRank: 0, genre })
+        if (existingTitles.has(title.toLowerCase())) continue
+        existingTitles.add(title.toLowerCase())
+        entry.songs.push({ title, deezerRank: t.rank || 0, genre })
         addedHere++
       }
     }
     newSongs += addedHere
-    console.log(`  [Deezer] アルバム ${albums.length}枚 → ${tracksFetched}曲取得（新規${addedHere}曲）`)
 
-    // Step 4: related artists
+    // Latest release date (from albums already fetched)
+    const latestDate = albums
+      .filter(a => a.release_date)
+      .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))[0]?.release_date || '?'
+
+    // Related artists
     const related = await deezerGetRelatedArtists(deezerId)
     let queuedRelated = 0
     for (const r of related) {
       if (seenIds.has(r.id)) continue
       if (!isJapaneseArtist({ name: r.name }, seedNames)) continue
+      if (processedNames.has((resolveJapaneseName(r.name) || r.name).toLowerCase())) continue
       seenIds.add(r.id)
       queue.push({ deezerId: r.id, displayName: resolveJapaneseName(r.name) || r.name })
       queuedRelated++
     }
-    console.log(`  [Deezer] 関連アーティスト ${related.length}組（うち日本${queuedRelated}組）`)
 
     processedCount++
-    const totalSongs = catalog.artists.reduce((n, a) => n + (a.songs?.length || 0), 0)
-    console.log(`  進捗: ${processedCount}組処理済み / キュー残り${queue.length} / 合計${totalSongs}曲\n`)
 
-    // Intermediate JSON save every 100 artists (crash recovery, no D1 mid-loop)
+    // B: Record to persistent log immediately
+    appendProcessedArtist(processedLog, name, deezerId, entry.songs.length)
+    processedNames.add(name.toLowerCase())
+
+    console.log(`[${processedCount}] ${name} (${latestDate}) | ${albums.length}枚→${tracksFetched}曲 (新規${addedHere}) | ${genre} | 関連+${queuedRelated} [${elapsedStr()}]`)
+
+    // C: Re-sort queue every 100 artists
     if (processedCount % 100 === 0) {
+      for (const item of queue) {
+        if (releaseDates.has(item.deezerId)) continue
+        try { releaseDates.set(item.deezerId, await deezerGetLatestAlbumDate(item.deezerId)) } catch (_) { releaseDates.set(item.deezerId, '0000-00-00') }
+        if (isTimeUp()) break
+      }
+      queue.sort((a, b) => (releaseDates.get(b.deezerId) || '0000-00-00').localeCompare(releaseDates.get(a.deezerId) || '0000-00-00'))
+      console.log(`  [再ソート] キュー${queue.length}件`)
+    }
+
+    // Intermediate save every 50 artists
+    if (processedCount % 50 === 0) {
       saveCatalog(catalog)
       saveCache()
-      console.log('  💾 JSON中間保存完了')
     }
 
     await sleep(100)
   }
 
-  // ── Phase 1 complete: save JSON ──
+  // ── Phase 1 complete ──
   saveCatalog(catalog)
   saveCache()
 
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
   const totalSongs = catalog.artists.reduce((n, a) => n + (a.songs?.length || 0), 0)
-  console.log(`\n=== Phase 1 (Deezer収集) 完了 ===`)
-  console.log(`処理アーティスト: ${processedCount}`)
-  console.log(`新規アーティスト: ${newArtists} / 既存メタ更新: ${updatedMeta}`)
-  console.log(`新規曲: ${newSongs}`)
-  console.log(`合計アーティスト: ${catalog.artists.length}`)
-  console.log(`合計曲: ${totalSongs}`)
-  console.log(`Time: ${elapsed}s`)
+  console.log(`\n=== Phase 1 完了 [${elapsedStr()}] ===`)
+  console.log(`処理: ${processedCount} | 新規artist: ${newArtists} | メタ更新: ${updatedMeta}`)
+  console.log(`新規曲: ${newSongs} | 合計: ${catalog.artists.length}アーティスト / ${totalSongs}曲`)
   printCacheStats()
 
-  // ── Phase 2: D1に一括投入 (SQL file) ──
+  // ── Phase 2: D1一括投入 ──
   if (!db.isAvailable()) {
     console.log('\n[D1] skipped (wrangler not available or COVERY_SKIP_D1=1)')
     return
   }
   console.log(`\n=== Phase 2: D1一括投入 ===`)
   syncToD1ViaFile(catalog)
-  console.log('=== D1投入完了 ===')
+  console.log(`=== 完了 (総処理時間: ${((Date.now() - BUILD_START_TIME) / 1000).toFixed(1)}s) ===`)
 }
 
 // Generate a .sql file per batch and execute via wrangler --file (fast)
