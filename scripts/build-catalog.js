@@ -440,7 +440,7 @@ function isJapaneseArtist(artist, seedNames = new Set()) {
 
 async function deezerJSON(url) {
   const data = await deezerGet(url)
-  await sleep(200)
+  await sleep(100) // Deezer allows 50 req/s; 100ms is safe
   return data
 }
 
@@ -623,32 +623,23 @@ async function buildCatalog() {
     const totalSongs = catalog.artists.reduce((n, a) => n + (a.songs?.length || 0), 0)
     console.log(`  進捗: ${processedCount}組処理済み / キュー残り${queue.length} / 合計${totalSongs}曲\n`)
 
-    // Intermediate save + D1 sync every 50 artists
-    if (processedCount % 50 === 0) {
+    // Intermediate JSON save every 100 artists (crash recovery, no D1 mid-loop)
+    if (processedCount % 100 === 0) {
       saveCatalog(catalog)
       saveCache()
-      if (db.isAvailable()) {
-        console.log('[D1] 中間同期...')
-        syncToD1(catalog)
-      }
+      console.log('  💾 JSON中間保存完了')
     }
 
-    await sleep(200)
+    await sleep(100)
   }
 
-  // ── Final save + D1 sync ──
+  // ── Phase 1 complete: save JSON ──
   saveCatalog(catalog)
   saveCache()
-  if (db.isAvailable()) {
-    console.log('\n[D1] 最終同期...')
-    syncToD1(catalog)
-  } else {
-    console.log('\n[D1] skipped (wrangler not available or COVERY_SKIP_D1=1)')
-  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
   const totalSongs = catalog.artists.reduce((n, a) => n + (a.songs?.length || 0), 0)
-  console.log(`\n=== Catalog Build Complete ===`)
+  console.log(`\n=== Phase 1 (Deezer収集) 完了 ===`)
   console.log(`処理アーティスト: ${processedCount}`)
   console.log(`新規アーティスト: ${newArtists} / 既存メタ更新: ${updatedMeta}`)
   console.log(`新規曲: ${newSongs}`)
@@ -656,36 +647,49 @@ async function buildCatalog() {
   console.log(`合計曲: ${totalSongs}`)
   console.log(`Time: ${elapsed}s`)
   printCacheStats()
+
+  // ── Phase 2: D1に一括投入 (SQL file) ──
+  if (!db.isAvailable()) {
+    console.log('\n[D1] skipped (wrangler not available or COVERY_SKIP_D1=1)')
+    return
+  }
+  console.log(`\n=== Phase 2: D1一括投入 ===`)
+  syncToD1ViaFile(catalog)
+  console.log('=== D1投入完了 ===')
 }
 
-function syncToD1(catalog) {
-  try {
-    const artistsPayload = catalog.artists.map(a => ({
-      name: a.name,
-      reading: a.reading,
-      spotifyId: a.spotifyId || '',  // kept for legacy rows
-      imageUrl: a.imageUrl || '',
-      genre: a.genre || '',
-    }))
-    db.batchInsertArtists(artistsPayload)
-    db.batchUpdateArtistMeta(artistsPayload)
+// Generate a .sql file per batch and execute via wrangler --file (fast)
+function syncToD1ViaFile(catalog) {
+  const esc = db.escape
 
-    const songsPayload = []
-    for (const a of catalog.artists) {
-      for (const s of (a.songs || [])) {
-        songsPayload.push({
-          title: s.title,
-          artistName: a.name,
-          deezerRank: s.deezerRank || 0,
-          genre: s.genre || a.genre || '',
-        })
-      }
+  // ── Artists ──
+  const artistStmts = catalog.artists.map(a =>
+    `INSERT OR IGNORE INTO artists (name, reading, spotify_id, image_url, genre) VALUES ('${esc(a.name)}', '${esc(a.reading || '')}', '${esc(a.spotifyId || '')}', '${esc(a.imageUrl || '')}', '${esc(a.genre || '')}')`
+  )
+  // Also UPDATE image_url/genre for pre-existing rows where empty
+  const metaStmts = catalog.artists
+    .filter(a => a.imageUrl || a.genre)
+    .map(a =>
+      `UPDATE artists SET image_url = CASE WHEN IFNULL(image_url,'')='' THEN '${esc(a.imageUrl || '')}' ELSE image_url END, genre = CASE WHEN IFNULL(genre,'')='' THEN '${esc(a.genre || '')}' ELSE genre END WHERE name = '${esc(a.name)}'`
+    )
+
+  // ── Songs ──
+  const songStmts = []
+  for (const a of catalog.artists) {
+    for (const s of (a.songs || [])) {
+      songStmts.push(
+        `INSERT OR IGNORE INTO songs (title, artist_id, deezer_rank, genre) VALUES ('${esc(s.title)}', (SELECT id FROM artists WHERE name = '${esc(a.name)}'), ${s.deezerRank || 0}, '${esc(s.genre || a.genre || '')}')`
+      )
     }
-    db.batchInsertSongs(songsPayload)
-    console.log(`[D1] 同期完了: ${artistsPayload.length} artists / ${songsPayload.length} songs`)
-  } catch (e) {
-    console.error('[D1] sync failed:', e.message)
   }
+
+  console.log(`[D1] Artists: ${artistStmts.length} INSERT + ${metaStmts.length} UPDATE`)
+  console.log(`[D1] Songs: ${songStmts.length} INSERT`)
+
+  // Execute in chunks via batchExecute (writes temp SQL files, 50 stmts per file)
+  db.batchExecute(artistStmts, 'artists-insert')
+  if (metaStmts.length > 0) db.batchExecute(metaStmts, 'artists-meta')
+  db.batchExecute(songStmts, 'songs-insert')
 }
 
 buildCatalog().catch(e => console.error('FATAL:', e.message))
