@@ -38,7 +38,7 @@ on:
 jobs:
   build-catalog:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # 最大6時間 (大量取得のため)
+    timeout-minutes: 35  # スクリプト30分 + Phase 2余裕5分
 
     steps:
       - name: Checkout repository
@@ -66,6 +66,7 @@ jobs:
       - name: Run build-catalog.js
         run: node scripts/build-catalog.js
         env:
+          TIME_LIMIT_MINUTES: '30'
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
