@@ -53,7 +53,8 @@
       "Bash(grep -l \"status\\\\|approved\" worker/scripts/*.js)",
       "Bash(git commit --allow-empty -m ':*)",
       "Bash(head -399 scripts/build-catalog.js)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(node scripts/fix-artist-meta.js)"
     ]
   }
 }
