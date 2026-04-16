@@ -54,7 +54,9 @@
       "Bash(git commit --allow-empty -m ':*)",
       "Bash(head -399 scripts/build-catalog.js)",
       "Read(//tmp/**)",
-      "Bash(node scripts/fix-artist-meta.js)"
+      "Bash(node scripts/fix-artist-meta.js)",
+      "Bash(curl -s 'https://covery-api.asdfghjkl14641.workers.dev/api/artists')",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\)\\); const a=d.artists||[]; console.log\\('total:', a.length\\); console.log\\('fields:', Object.keys\\(a[0]||{}\\)\\); console.log\\('hasImageUrl:', a.filter\\(x=>x.imageUrl\\).length\\); console.log\\('noReading:', a.filter\\(x=>!x.reading\\).length\\); console.log\\('sample:', JSON.stringify\\(a.slice\\(0,2\\),null,2\\)\\)\")"
     ]
   }
 }

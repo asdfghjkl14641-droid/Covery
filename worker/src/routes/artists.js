@@ -3,17 +3,21 @@ import { jsonResponse, errorResponse } from '../utils/cors.js'
 export async function handleArtists(request, env) {
   try {
     const { results } = await env.DB.prepare(`
-      SELECT a.id, a.name, a.reading,
+      SELECT a.id, a.name, a.reading, a.image_url, a.genre,
         (SELECT COUNT(*) FROM songs s WHERE s.artist_id = a.id) AS song_count
       FROM artists a
       ORDER BY
         CASE WHEN a.reading GLOB '[0-9]*' THEN 0
              WHEN a.reading GLOB '[A-Za-z]*' THEN 1
              ELSE 2 END,
-        a.reading
+        a.reading COLLATE NOCASE
     `).all()
     return jsonResponse({
-      artists: results.map(r => ({ id: r.id, name: r.name, reading: r.reading, songCount: r.song_count })),
+      artists: results.map(r => ({
+        id: r.id, name: r.name, reading: r.reading,
+        imageUrl: r.image_url || '', genre: r.genre || '',
+        songCount: r.song_count,
+      })),
     })
   } catch (e) {
     return errorResponse(e.message)

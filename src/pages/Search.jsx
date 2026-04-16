@@ -55,7 +55,7 @@ const Search = ({ onNavigateToCovers, onNavigateToArtist, onNavigateToSinger }) 
       console.log(`[Covery] API: ${arr.length} artists loaded`)
       setApiArtists(arr.map(a => ({
         name: a.name, id: a.id, reading: a.reading || a.name,
-        imageUrl: '', songCount: a.songCount,
+        imageUrl: a.imageUrl || '', songCount: a.songCount,
       })))
     })
   }, [])
