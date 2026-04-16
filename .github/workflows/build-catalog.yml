@@ -66,6 +66,7 @@ jobs:
       - name: Run build-catalog.js
         run: node scripts/build-catalog.js
         env:
+          TIME_LIMIT_MINUTES: '5'
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

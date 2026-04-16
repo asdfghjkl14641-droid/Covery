@@ -12,10 +12,25 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const OUTPUT_FILE = path.join(__dirname, '../src/data/songCatalog.json')
 
-const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID
-const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET
-
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+// ══════════════════════════════════════════════════════════
+//  TIME LIMIT (default 5 minutes, override with TIME_LIMIT_MINUTES env)
+// ══════════════════════════════════════════════════════════
+const TIME_LIMIT_MS = (parseInt(process.env.TIME_LIMIT_MINUTES || '5', 10)) * 60 * 1000
+let BUILD_START_TIME = 0
+
+function isTimeUp() {
+  return (Date.now() - BUILD_START_TIME) >= TIME_LIMIT_MS
+}
+
+function elapsedStr() {
+  const s = Math.floor((Date.now() - BUILD_START_TIME) / 1000)
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  const limitMin = Math.floor(TIME_LIMIT_MS / 60000)
+  return `${m}:${String(sec).padStart(2, '0')} / ${limitMin}:00`
+}
 
 // ══════════════════════════════════════════════════════════
 //  HARDCODED JAPANESE ARTIST LIST (200+ artists)
@@ -115,148 +130,46 @@ const JP_ARTISTS = [
   '氷川きよし', '坂本冬美', '藤あや子', '島津亜矢',
   '三山ひろし', '山内惠介',
 
-  // ══════════════════════════════════════════════════════════
-  //  カタログ拡充 2026-04 (既存名と重複する場合は自動スキップ)
-  // ══════════════════════════════════════════════════════════
-
-  // ── 追加ボカロP ──
+  // ── カタログ拡充 2026-04 ──
   'ハチ', 'DOVA-SYNDROME', '蝶々P', 'Last Note.', '150P',
   'Orangestar', '稲葉曇', 'Tani Yuuki', 'なとり',
-
-  // ── 追加アニソン/声優系 ──
   '鈴木雅之', 'SawanoHiroyuki[nZk]', 'nano', '鬼頭明里',
   '内田真礼', '水瀬いのり', '早見沙織', 'fripSide', 'TRUE',
   'MYTH & ROID', 'PENGUIN RESEARCH',
-
-  // ── 昭和〜平成ヒットメーカー追加 ──
-  '山口百恵', 'テレサテン', '大滝詠一', 'BOØWY',
-  '奥田民生', '一青窈',
-
-  // ── K-POP (日本でカバーされやすい) ──
+  '山口百恵', 'テレサテン', '大滝詠一', 'BOØWY', '奥田民生', '一青窈',
   'BTS', 'BLACKPINK', 'TWICE', 'IU', 'SEVENTEEN',
   'Stray Kids', 'aespa', 'NewJeans', 'LE SSERAFIM', 'IVE',
-
-  // ── 最近の人気アーティスト ──
   '神はサイコロを振らない', 'INI',
-
-  // ── 追加バンド/J-POP (カバー定番) ──
-  'FUNKY MONKEY BABYS', 'Aqua Timez', 'flumpool',
-  'ポルノグラフィティ', 'JUDY AND MARY',
-  'スキマスイッチ', 'いきものがかり', 'GLAY',
-
-  // ── シンガーソングライター・城南海系 ──
-  '清塚信也', 'リーガルリリー', 'Saucy Dog',
-  '秋山黄色', 'くるり', 'THE BACK HORN',
+  'JUDY AND MARY', 'スキマスイッチ',
+  '清塚信也', 'リーガルリリー', '秋山黄色', 'くるり', 'THE BACK HORN',
   'the band apart', 'ストレイテナー', 'MONOEYES',
-  '04 Limited Sazabys',
-
-  // ── 追加アイドル/男性グループ ──
-  'なにわ男子', 'Travis Japan', 'WEST.', 'Aぇ! group',
-  'timelesz', 'Number_i', '少年隊',
-
-  // ── 追加女性アイドル/グループ ──
+  'Travis Japan', 'WEST.', 'Aぇ! group', 'timelesz', 'Number_i', '少年隊',
   'HKT48', 'NGT48', 'NMB48', 'SKE48', 'STU48',
-  'ラストアイドル', '=LOVE', '≠ME', 'FRUITS ZIPPER',
-
-  // ── 歌い手文化で人気のJ-POPバンド ──
-  'セカオワ', 'オレンジスパイニクラブ', 'THE IDOLM@STER',
-  'UNISON SQUARE GARDEN', 'ヒグチアイ', '菅原圭',
-  'みゆはん', 'SHE\'S', 'vaundy',
-
-  // ── トラップ・ラップ ──
-  'BAD HOP', 'Anarchy', 'SIMI LAB',
+  '=LOVE', '≠ME', 'FRUITS ZIPPER',
+  'オレンジスパイニクラブ', 'ヒグチアイ', '菅原圭', 'SHE\'S',
   'tofubeats', 'PUNPEE', 'Daichi Yamamoto',
-
-  // ── 最新世代 (2023-2025) ──
-  'ロクデナシ', 'Kaneee', 'MAZZEL', 'MY LITTLE LOVER',
-  'マルシィ', 'Omoinotake', '緑黄色社会', 'The Songbards',
-  'indigo la End', '水曜日のカンパネラ', 'imase',
-  'あたらよ', '羊文学', 'Ryokuoushoku Shakai',
-  '秋茜', 'yonawo', 'Tempalay',
-
-  // ══════════════════════════════════════════════════════════
-  //  追加拡充 2026-04 バッチ2 (500+ / 5000+ songs目標)
-  // ══════════════════════════════════════════════════════════
-
-  // ── J-POP ソロ・シンガー ──
-  'back number', '山下智久', '錦戸亮', '赤西仁', '亀梨和也',
-  '手越祐也', 'ジェジュン', 'ユナク', '平野紫耀',
-  '中島健人', '山田涼介', 'KAT-TUN', '北山宏光',
-  'KinKi Kids', '堂本光一', '堂本剛', '近藤真彦',
-  'ChayU', '井口裕香', '東山奈央', '佐倉綾音',
-  '日笠陽子', '小倉唯', '石原夏織', '田中美海',
-  '豊崎愛生', '戸松遥', '寿美菜子', '竹達彩奈',
-  '悠木碧', '種田梨沙', '雨宮天', '伊藤美来',
-  'Machico', '上坂すみれ',
-
-  // ── 歌い手出身アーティスト ──
+  'ロクデナシ', 'MAZZEL', 'MY LITTLE LOVER', 'マルシィ', 'Omoinotake',
+  'The Songbards', '水曜日のカンパネラ', 'あたらよ', '羊文学',
+  'yonawo', 'Tempalay',
   'Eve', 'まふまふ', '天月-あまつき-', 'そらる', '浦島坂田船',
-  'ぴょん吉', 'りぶ', 'Gero', 'un:c', 'いとくとら',
-  'あらき', 'りぶろ', '灯油', 'ぐるたみん', 'ASK',
-  'Kradness', 'clear', 'アユニ・D', 'しゆん', '島爺',
-  'Will Stetson', 'kradness', 'luz', '奏音69',
-  '蒼井翔太', '小林竜之', '蒼井ブルー',
-
-  // ── ネット発アーティスト・ボカロ系 ──
-  'カンザキイオリ', 'ぬゆり', 'Iyowa', 'ちゃんみな',
-  '浜崎容子', 'GUMI', '巡音ルカ', '鏡音リン・レン',
-  'はるまきごはん', '羽累', 'あるいは', 'TOOBOE',
-  'R Sound Design', 'やなぎなぎ', 'nqrse',
-  '花譜', 'ヰ世界情緒', '理芽', '春猿火',
-  '笹川真生', 'amazarashi', 'RAISE A SUILEN',
-
-  // ── インディーズ・ロック・オルタナ ──
-  'クリープハイプ', 'andymori', 'UNISON', 'eastern youth',
-  'サカナクション', 'シナリオアート', 'go!go!vanillas',
-  'SHE\'S', 'lovely summer-chan', 'CHAI',
-  'DADARAY', 'PEOPLE 1', 'メメタァ', 'My Hair is Bad',
-  'a flood of circle', 'UVERworld', 'ROTTENGRAFFTY',
-  '凛として時雨', 'ART-SCHOOL', 'GEZAN',
-  'Czecho No Republic', 'LAMP IN TERREN', '夜の本気ダンス',
-  'クラムボン', 'toconoma', 'Schroeder-Headz',
-
-  // ── K-POP 追加 ──
-  'EXO', 'Red Velvet', 'SHINee', 'Girls\' Generation',
-  'MAMAMOO', 'TXT', 'ATEEZ', 'ENHYPEN', 'ITZY',
-  '(G)I-DLE', 'Kep1er', 'NMIXX', 'BABYMONSTER',
-  'ZEROBASEONE', 'RIIZE', 'ILLIT', 'tripleS',
-
-  // ── アニメソング 追加 ──
+  'luz', '蒼井翔太',
+  'カンザキイオリ', 'ぬゆり', 'ちゃんみな', 'はるまきごはん', 'TOOBOE',
+  'やなぎなぎ', '花譜', '理芽',
+  'a flood of circle', 'ROTTENGRAFFTY', 'eastern youth',
+  'go!go!vanillas', 'CHAI', 'PEOPLE 1', '夜の本気ダンス',
+  'クラムボン', 'Schroeder-Headz',
+  'EXO', 'Red Velvet', 'SHINee', 'MAMAMOO', 'TXT', 'ATEEZ',
+  'ENHYPEN', 'ITZY', '(G)I-DLE', 'NMIXX',
   'GRANRODEO', 'angela', 'JAM Project', 'supercell',
-  '奥井雅美', '影山ヒロノブ', '串田アキラ', '水木一郎',
-  '堀江美都子', '栗林みな実', '小林香織', 'KOTOKO',
-  'yuki kajiura', 'eufonius', 'Suara', 'Do As Infinity',
-  '菅原紗由理', 'THE SIXTH LIE', 'Bentham', 'OxT',
-  'Burnout Syndromes', '妖精帝國', 'Mashumairesh!!',
-  'The Sketchbook', 'Wake Up, Girls!',
-
-  // ── 演歌・歌謡曲 追加 ──
-  '五木ひろし', '細川たかし', '森進一', '森昌子',
-  '西田敏行', '八代亜紀', '都はるみ', '小林旭',
-  '北原ミレイ', '前川清', '五代目 三遊亭圓楽',
-  '田川寿美', '市川由紀乃', '岩佐美咲', '川中美幸',
-
-  // ── 古典・80s/90sバンド ──
-  'CHAGE and ASKA', '爆風スランプ', 'THE ALFEE',
-  'チューリップ', 'オフコース', 'アリス', 'かぐや姫',
-  'さだまさし', '南こうせつ', '吉田拓郎', 'RCサクセション',
-  'BARBEE BOYS', 'バービーボーイズ', 'アンジー',
-  '電気グルーヴ', 'ZIGGY', 'REBECCA', 'プリンセス プリンセス',
-  'JUN SKY WALKER(S)', 'THE BOOM', 'ウルフルケイスケ',
-  'アンジェラ・アキ', '川本真琴',
-
-  // ── インストゥルメンタル・ジャズ・フュージョン ──
-  'T-SQUARE', 'CASIOPEA', 'SPACE CRAFT', '日野皓正',
-  '渡辺香津美', '向谷実', 'DEPAPEPE', '押尾コータロー',
-
-  // ── 追加女性アーティスト ──
-  '絢香', '新山詩織', 'chay', '住岡梨奈', 'Ms.OOJA',
-  '秦基博', '清水翔太', 'AAAMYYY', '石崎ひゅーい',
-  '塩塚モエカ', 'ヒグチアイ', '原田知世', 'キセル',
+  'KOTOKO', 'Do As Infinity', 'Burnout Syndromes', 'OxT',
+  '五木ひろし', '細川たかし', '八代亜紀', '都はるみ',
+  'CHAGE and ASKA', 'THE ALFEE', 'さだまさし', 'RCサクセション',
+  '電気グルーヴ', 'REBECCA', 'プリンセス プリンセス',
+  'T-SQUARE', 'DEPAPEPE', '押尾コータロー',
 ]
 
 // ══════════════════════════════════════════════════════════
-//  English → Japanese name map (for artists Spotify returns in English)
+//  English → Japanese name map
 // ══════════════════════════════════════════════════════════
 const NAME_MAP = {
   'Kenshi Yonezu': '米津玄師', 'Aimyon': 'あいみょん', 'Yuuri': '優里',
@@ -360,7 +273,6 @@ function katakanaToHiragana(str) {
 function generateReading(name) {
   if (READING_MAP[name]) return READING_MAP[name]
   if (/^[A-Za-z0-9]/.test(name)) return name
-  // Try katakana→hiragana auto
   const converted = katakanaToHiragana(name)
   if (converted !== name) return converted.toLowerCase()
   return name
@@ -380,42 +292,26 @@ function saveCatalog(catalog) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  DEEZER-ONLY SNOWBALL BUILDER
+//  GENRE MAP (with katakana support + soundtrack exclusion)
 // ══════════════════════════════════════════════════════════
-
-// Deezer genre → 日本語カテゴリ (album.genres[].name.toLowerCase() で照合)
 const GENRE_MAP = {
-  'j-pop': 'J-POP',
-  'pop': 'J-POP',
-  'j-rock': '邦ロック',
-  'rock': '邦ロック',
+  'j-pop': 'J-POP', 'pop': 'J-POP',
+  'j-rock': '邦ロック', 'rock': '邦ロック', 'ロック': '邦ロック',
   'alternative': 'オルタナティブ',
-  'anime': 'アニソン',
-  'rap/hip hop': 'ヒップホップ',
-  'hip hop': 'ヒップホップ',
-  'r&b': 'R&B',
-  'electro': 'エレクトロ',
-  'metal': 'メタル',
-  'jazz': 'ジャズ',
-  'classical': 'クラシック',
-  'reggae': 'レゲエ',
-  'folk': 'フォーク',
-  'asian music': 'J-POP',
-  'korean pop': 'K-POP',
-  'k-pop': 'K-POP',
-  'films/games': 'サウンドトラック',
-  'soundtrack': 'サウンドトラック',
-  'kids': 'キッズ',
-  'latin music': 'ラテン',
-  'african music': 'アフリカ',
-  'dance': 'ダンス',
-  'soul & funk': 'ソウル',
-  'soul': 'ソウル',
-  'funk': 'ファンク',
-  'blues': 'ブルース',
-  'country': 'カントリー',
-  'enka': '演歌',
+  'anime': 'アニソン', 'アニメ': 'アニソン',
+  'rap/hip hop': 'ヒップホップ', 'hip hop': 'ヒップホップ', 'ヒップホップ': 'ヒップホップ',
+  'r&b': 'R&B', 'electro': 'エレクトロ',
+  'metal': 'メタル', 'メタル': 'メタル',
+  'jazz': 'ジャズ', 'classical': 'クラシック', 'reggae': 'レゲエ', 'folk': 'フォーク',
+  'asian music': 'J-POP', 'アジア': 'J-POP', 'ポップ': 'J-POP',
+  'korean pop': 'K-POP', 'k-pop': 'K-POP',
+  'films/games': 'サウンドトラック', 'soundtrack': 'サウンドトラック', '映画': 'サウンドトラック',
+  'kids': 'キッズ', 'dance': 'ダンス',
+  'soul & funk': 'ソウル', 'soul': 'ソウル', 'blues': 'ブルース',
+  'enka': '演歌', '演歌': '演歌',
 }
+
+const SOUNDTRACK_GENRES = new Set(['サウンドトラック', 'キッズ'])
 
 function mapGenre(name) {
   if (!name) return 'J-POP'
@@ -426,7 +322,6 @@ function mapGenre(name) {
   return 'J-POP'
 }
 
-// Japanese artist detection (Deezer has no artist-level genres)
 function isJapaneseArtist(artist, seedNames = new Set()) {
   if (!artist) return false
   if (seedNames.has(artist.name)) return true
@@ -440,7 +335,7 @@ function isJapaneseArtist(artist, seedNames = new Set()) {
 
 async function deezerJSON(url) {
   const data = await deezerGet(url)
-  await sleep(100) // Deezer allows 50 req/s; 100ms is safe
+  await sleep(200)
   return data
 }
 
@@ -448,8 +343,8 @@ async function deezerSearchArtist(name) {
   const cacheKey = `dz_search_${name}`
   const cached = getCached('deezerArtistSearch', cacheKey)
   if (cached) return cached
-  const data = await deezerJSON(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=1`)
-  const hit = data?.data?.[0] || null
+  const data = await deezerJSON(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=5`)
+  const hit = data?.data?.find(a => a.name.toLowerCase() === name.toLowerCase()) || data?.data?.[0] || null
   if (hit) setCache('deezerArtistSearch', cacheKey, hit)
   return hit
 }
@@ -463,14 +358,25 @@ async function deezerGetArtistById(deezerId) {
   return data
 }
 
-async function deezerGetAlbumsByArtist(deezerId) {
-  const cacheKey = `dz_albums_${deezerId}`
-  const cached = getCached('deezerAlbums', cacheKey)
-  if (cached) return cached
-  const data = await deezerJSON(`https://api.deezer.com/artist/${deezerId}/albums?limit=100`)
-  const albums = data?.data || []
-  setCache('deezerAlbums', cacheKey, albums)
-  return albums
+// Paginated album fetch
+async function deezerGetAllAlbums(deezerId) {
+  const allAlbums = []
+  let offset = 0
+  while (true) {
+    const cacheKey = `dz_albums_${deezerId}_${offset}`
+    let page = getCached('deezerAlbums', cacheKey)
+    if (!page) {
+      const data = await deezerJSON(`https://api.deezer.com/artist/${deezerId}/albums?limit=100&index=${offset}`)
+      page = data?.data || []
+      setCache('deezerAlbums', cacheKey, page)
+      // Also cache under legacy key for offset=0
+      if (offset === 0) setCache('deezerAlbums', `dz_albums_${deezerId}`, page)
+    }
+    allAlbums.push(...page)
+    if (page.length < 100) break
+    offset += 100
+  }
+  return allAlbums
 }
 
 async function deezerGetAlbumTracks(albumId) {
@@ -502,43 +408,63 @@ async function deezerGetRelatedArtists(deezerId) {
   return related
 }
 
-// Derive genre by looking at the artist's first album
-async function deezerResolveGenre(deezerId) {
-  const albums = await deezerGetAlbumsByArtist(deezerId)
-  if (albums.length === 0) return 'J-POP'
-  const album = await deezerGetAlbumDetail(albums[0].id)
-  const gArr = album?.genres?.data || []
-  if (gArr.length === 0) return 'J-POP'
-  return mapGenre(gArr[0].name)
+// Multi-album genre resolution (skip soundtracks)
+async function deezerResolveGenre(deezerId, albums) {
+  const candidates = [...(albums || [])]
+    .filter(a => a.release_date && (a.record_type === 'album' || a.record_type === 'ep'))
+    .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
+    .slice(0, 3)
+
+  if (candidates.length === 0 && albums?.length > 0) {
+    candidates.push(albums[0]) // fallback to any album
+  }
+
+  const genreCounts = {}
+  for (const alb of candidates) {
+    const detail = await deezerGetAlbumDetail(alb.id)
+    const genres = detail?.genres?.data || []
+    for (const g of genres) {
+      const mapped = mapGenre(g.name)
+      if (!SOUNDTRACK_GENRES.has(mapped)) {
+        genreCounts[mapped] = (genreCounts[mapped] || 0) + 1
+      }
+    }
+  }
+
+  const sorted = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])
+  return sorted.length > 0 ? sorted[0][0] : 'J-POP'
 }
 
 // ══════════════════════════════════════════════════════════
-//  MAIN (Deezer-only snowball)
+//  MAIN (Deezer-only snowball with time limit)
 // ══════════════════════════════════════════════════════════
 async function buildCatalog() {
-  const startTime = Date.now()
-  console.log('=== Covery Catalog Builder v5 (Deezer-only snowball) ===\n')
+  BUILD_START_TIME = Date.now()
+  const limitMin = Math.floor(TIME_LIMIT_MS / 60000)
+  console.log(`=== Covery Catalog Builder v6 (time-limited snowball) ===`)
+  console.log(`[制限時間] ${limitMin}分\n`)
   loadCache()
 
   const catalog = loadExisting()
   const byName = new Map(catalog.artists.map(a => [a.name.toLowerCase(), a]))
-  console.log(`Loaded existing catalog: ${catalog.artists.length} artists\n`)
+  console.log(`既存カタログ: ${catalog.artists.length}アーティスト\n`)
 
   const seedNames = new Set(JP_ARTISTS)
-  const queue = []          // [{deezerId, displayName}]
+  const queue = []
   const seenIds = new Set()
   const processed = new Set()
 
   // ── Seed queue via Deezer search ──
   console.log(`── Deezer検索で ${JP_ARTISTS.length} 件の初期アーティストを解決 ──`)
   for (const name of JP_ARTISTS) {
+    if (isTimeUp()) break
     const hit = await deezerSearchArtist(name)
     if (hit && !seenIds.has(hit.id)) {
       queue.push({ deezerId: hit.id, displayName: name })
       seenIds.add(hit.id)
     }
   }
-  console.log(`  → キュー開始: ${queue.length}件\n`)
+  console.log(`  → キュー開始: ${queue.length}件 [経過: ${elapsedStr()}]\n`)
 
   const MAX_ARTISTS = 5000
   let processedCount = 0
@@ -547,6 +473,12 @@ async function buildCatalog() {
   let updatedMeta = 0
 
   while (queue.length > 0 && processedCount < MAX_ARTISTS) {
+    // ── Time check ──
+    if (isTimeUp()) {
+      console.log(`\n[時間切れ] ${elapsedStr()} Phase 1打ち切り`)
+      break
+    }
+
     const { deezerId, displayName } = queue.shift()
     if (processed.has(deezerId)) continue
     processed.add(deezerId)
@@ -555,22 +487,42 @@ async function buildCatalog() {
     const detail = await deezerGetArtistById(deezerId)
     if (!detail || !detail.id) continue
 
-    // Display name: prefer seed name if match, else NAME_MAP, else Deezer's
     const rawName = detail.name
     const name = seedNames.has(displayName)
       ? displayName
       : (resolveJapaneseName(rawName) || rawName)
 
-    // Japanese check — skip non-Japanese unless explicitly seeded
     if (!isJapaneseArtist({ name }, seedNames) && !seedNames.has(displayName)) {
       continue
     }
 
     const imageUrl = detail.picture_xl || detail.picture_big || detail.picture_medium || detail.picture || ''
     const reading = generateReading(name)
-    const genre = await deezerResolveGenre(deezerId)
 
-    console.log(`[Deezer] ${name} (画像: ${imageUrl ? 'あり' : 'なし'}, ジャンル: ${genre})`)
+    // Step 2+3: albums + tracks (paginated)
+    const albums = await deezerGetAllAlbums(deezerId)
+    const existingTitles = new Set((byName.get(name.toLowerCase())?.songs || []).map(s => s.title.toLowerCase()))
+
+    let addedHere = 0
+    let tracksFetched = 0
+    for (const album of albums) {
+      if (isTimeUp()) break
+      const tracks = await deezerGetAlbumTracks(album.id)
+      tracksFetched += tracks.length
+      for (const t of tracks) {
+        const title = (t.title || '').trim()
+        if (!title) continue
+        const lower = title.toLowerCase()
+        if (existingTitles.has(lower)) continue
+        existingTitles.add(lower)
+        addedHere++
+      }
+    }
+
+    // Step 4: genre (multi-album, skip soundtracks)
+    const genre = await deezerResolveGenre(deezerId, albums)
+
+    console.log(`[${processedCount + 1}] ${name} | アルバム${albums.length}枚 → ${tracksFetched}曲 (新規${addedHere}) | 画像:${imageUrl ? 'あり' : 'なし'} | ${genre} [${elapsedStr()}]`)
 
     // Upsert into in-memory catalog
     let entry = byName.get(name.toLowerCase())
@@ -581,33 +533,27 @@ async function buildCatalog() {
       newArtists++
     } else {
       if (!entry.imageUrl && imageUrl) entry.imageUrl = imageUrl
-      if (!entry.genre && genre) entry.genre = genre
+      if (imageUrl) entry.imageUrl = imageUrl // always update to latest
+      if (!entry.genre || entry.genre === 'J-POP') entry.genre = genre
       if (!entry.deezerId) entry.deezerId = deezerId
       updatedMeta++
     }
 
-    // Step 2+3: albums + tracks
-    const albums = await deezerGetAlbumsByArtist(deezerId)
-    const existingTitles = new Set((entry.songs || []).map(s => s.title.toLowerCase()))
-    let addedHere = 0
-    let tracksFetched = 0
+    // Re-add songs (use existing entry's songs as base)
+    const entrySongTitles = new Set((entry.songs || []).map(s => s.title.toLowerCase()))
     for (const album of albums) {
-      const tracks = await deezerGetAlbumTracks(album.id)
-      tracksFetched += tracks.length
+      const tracks = await deezerGetAlbumTracks(album.id) // cached
       for (const t of tracks) {
         const title = (t.title || '').trim()
         if (!title) continue
-        const lower = title.toLowerCase()
-        if (existingTitles.has(lower)) continue
-        existingTitles.add(lower)
-        entry.songs.push({ title, deezerRank: 0, genre })
-        addedHere++
+        if (entrySongTitles.has(title.toLowerCase())) continue
+        entrySongTitles.add(title.toLowerCase())
+        entry.songs.push({ title, deezerRank: t.rank || 0, genre })
       }
     }
     newSongs += addedHere
-    console.log(`  [Deezer] アルバム ${albums.length}枚 → ${tracksFetched}曲取得（新規${addedHere}曲）`)
 
-    // Step 4: related artists
+    // Step 5: related artists
     const related = await deezerGetRelatedArtists(deezerId)
     let queuedRelated = 0
     for (const r of related) {
@@ -617,63 +563,51 @@ async function buildCatalog() {
       queue.push({ deezerId: r.id, displayName: resolveJapaneseName(r.name) || r.name })
       queuedRelated++
     }
-    console.log(`  [Deezer] 関連アーティスト ${related.length}組（うち日本${queuedRelated}組）`)
+    if (queuedRelated > 0) console.log(`  → 関連${related.length}組 (日本語${queuedRelated}組キュー追加)`)
 
     processedCount++
-    const totalSongs = catalog.artists.reduce((n, a) => n + (a.songs?.length || 0), 0)
-    console.log(`  進捗: ${processedCount}組処理済み / キュー残り${queue.length} / 合計${totalSongs}曲\n`)
 
-    // Intermediate JSON save every 100 artists (crash recovery, no D1 mid-loop)
+    // Intermediate save every 100 artists
     if (processedCount % 100 === 0) {
       saveCatalog(catalog)
       saveCache()
-      console.log('  💾 JSON中間保存完了')
+      console.log(`  [中間保存] ${processedCount}組完了`)
     }
-
-    await sleep(100)
   }
 
   // ── Phase 1 complete: save JSON ──
   saveCatalog(catalog)
   saveCache()
 
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
   const totalSongs = catalog.artists.reduce((n, a) => n + (a.songs?.length || 0), 0)
-  console.log(`\n=== Phase 1 (Deezer収集) 完了 ===`)
-  console.log(`処理アーティスト: ${processedCount}`)
-  console.log(`新規アーティスト: ${newArtists} / 既存メタ更新: ${updatedMeta}`)
-  console.log(`新規曲: ${newSongs}`)
-  console.log(`合計アーティスト: ${catalog.artists.length}`)
-  console.log(`合計曲: ${totalSongs}`)
-  console.log(`Time: ${elapsed}s`)
+  console.log(`\n=== Phase 1 完了 [${elapsedStr()}] ===`)
+  console.log(`処理: ${processedCount}組 | 新規アーティスト: ${newArtists} | メタ更新: ${updatedMeta}`)
+  console.log(`新規曲: ${newSongs} | 合計: ${catalog.artists.length}アーティスト / ${totalSongs}曲`)
   printCacheStats()
 
-  // ── Phase 2: D1に一括投入 (SQL file) ──
+  // ── Phase 2: D1一括投入 ──
   if (!db.isAvailable()) {
     console.log('\n[D1] skipped (wrangler not available or COVERY_SKIP_D1=1)')
     return
   }
   console.log(`\n=== Phase 2: D1一括投入 ===`)
   syncToD1ViaFile(catalog)
-  console.log('=== D1投入完了 ===')
+  const finalElapsed = ((Date.now() - BUILD_START_TIME) / 1000).toFixed(1)
+  console.log(`=== 完了 (総処理時間: ${finalElapsed}s) ===`)
 }
 
-// Generate a .sql file per batch and execute via wrangler --file (fast)
 function syncToD1ViaFile(catalog) {
   const esc = db.escape
 
-  // ── Artists ──
   const artistStmts = catalog.artists.map(a =>
     `INSERT OR IGNORE INTO artists (name, reading, spotify_id, image_url, genre) VALUES ('${esc(a.name)}', '${esc(a.reading || '')}', '${esc(a.spotifyId || '')}', '${esc(a.imageUrl || '')}', '${esc(a.genre || '')}')`
   )
-  // Also UPDATE image_url/genre for pre-existing rows where empty
   const metaStmts = catalog.artists
     .filter(a => a.imageUrl || a.genre)
     .map(a =>
       `UPDATE artists SET image_url = CASE WHEN IFNULL(image_url,'')='' THEN '${esc(a.imageUrl || '')}' ELSE image_url END, genre = CASE WHEN IFNULL(genre,'')='' THEN '${esc(a.genre || '')}' ELSE genre END WHERE name = '${esc(a.name)}'`
     )
 
-  // ── Songs ──
   const songStmts = []
   for (const a of catalog.artists) {
     for (const s of (a.songs || [])) {
@@ -686,7 +620,6 @@ function syncToD1ViaFile(catalog) {
   console.log(`[D1] Artists: ${artistStmts.length} INSERT + ${metaStmts.length} UPDATE`)
   console.log(`[D1] Songs: ${songStmts.length} INSERT`)
 
-  // Execute in chunks via batchExecute (writes temp SQL files, 50 stmts per file)
   db.batchExecute(artistStmts, 'artists-insert')
   if (metaStmts.length > 0) db.batchExecute(metaStmts, 'artists-meta')
   db.batchExecute(songStmts, 'songs-insert')

@@ -45,8 +45,10 @@
           "deezerRank": 385157
         }
       ],
-      "imageUrl": "https://i.scdn.co/image/ab6761610000e5eb551104d6bfdfc4de65b057a2",
-      "reading": "よねづけんし"
+      "imageUrl": "https://cdn-images.dzcdn.net/images/artist//1000x1000-000000-80-0-0.jpg",
+      "reading": "よねづけんし",
+      "genre": "J-POP",
+      "deezerId": 7232650
     },
     {
       "name": "YOASOBI",
@@ -659,14 +661,686 @@
     {
       "name": "星野源",
       "spotifyId": "",
-      "imageUrl": "",
+      "imageUrl": "https://cdn-images.dzcdn.net/images/artist/c68df917db7b8382f58529c02f3b2bde/1000x1000-000000-80-0-0.jpg",
       "songs": [
         {
           "title": "晚风告白",
           "deezerRank": 191344
+        },
+        {
+          "title": "創造",
+          "deezerRank": 116791,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Mad Hope (feat. Louis Cole, Sam Gendel, Sam Wilkes)",
+          "deezerRank": 123878,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Star",
+          "deezerRank": 127402,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Glitch",
+          "deezerRank": 92270,
+          "genre": "J-POP"
+        },
+        {
+          "title": "喜劇",
+          "deezerRank": 76646,
+          "genre": "J-POP"
+        },
+        {
+          "title": "2 (feat. Lee Youngji)",
+          "deezerRank": 112737,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Melody",
+          "deezerRank": 103000,
+          "genre": "J-POP"
+        },
+        {
+          "title": "不思議",
+          "deezerRank": 137106,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Memories (feat. UMI, Camilo)",
+          "deezerRank": 75969,
+          "genre": "J-POP"
+        },
+        {
+          "title": "暗闇",
+          "deezerRank": 51966,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Why",
+          "deezerRank": 96102,
+          "genre": "J-POP"
+        },
+        {
+          "title": "生命体",
+          "deezerRank": 47397,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Eden (feat. Cordae, DJ Jazzy Jeff)",
+          "deezerRank": 74064,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Sayonara",
+          "deezerRank": 250382,
+          "genre": "J-POP"
+        },
+        {
+          "title": "異世界混合大舞踏会",
+          "deezerRank": 43635,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Eureka",
+          "deezerRank": 64158,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Pop Virus",
+          "deezerRank": 269913,
+          "genre": "J-POP"
+        },
+        {
+          "title": "恋",
+          "deezerRank": 214990,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Get a Feel",
+          "deezerRank": 137206,
+          "genre": "J-POP"
+        },
+        {
+          "title": "肌",
+          "deezerRank": 112377,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Pair Dancer",
+          "deezerRank": 114622,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Present",
+          "deezerRank": 101664,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Dead Leaf",
+          "deezerRank": 88732,
+          "genre": "J-POP"
+        },
+        {
+          "title": "KIDS",
+          "deezerRank": 90601,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Continues",
+          "deezerRank": 100794,
+          "genre": "J-POP"
+        },
+        {
+          "title": "サピエンス",
+          "deezerRank": 91476,
+          "genre": "J-POP"
+        },
+        {
+          "title": "アイデア",
+          "deezerRank": 153878,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Family Song",
+          "deezerRank": 115299,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Nothing",
+          "deezerRank": 104766,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Hello Song",
+          "deezerRank": 103910,
+          "genre": "J-POP"
+        },
+        {
+          "title": "時よ",
+          "deezerRank": 144252,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Week End",
+          "deezerRank": 145958,
+          "genre": "J-POP"
+        },
+        {
+          "title": "SUN",
+          "deezerRank": 113614,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ミスユー",
+          "deezerRank": 66204,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Soul",
+          "deezerRank": 42081,
+          "genre": "J-POP"
+        },
+        {
+          "title": "口づけ",
+          "deezerRank": 62535,
+          "genre": "J-POP"
+        },
+        {
+          "title": "地獄でなぜ悪い",
+          "deezerRank": 108168,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Nerd Strut (Instrumental)",
+          "deezerRank": 43439,
+          "genre": "J-POP"
+        },
+        {
+          "title": "桜の森",
+          "deezerRank": 38113,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Crazy Crazy",
+          "deezerRank": 106281,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Snow Men",
+          "deezerRank": 70681,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Down Town",
+          "deezerRank": 27621,
+          "genre": "J-POP"
+        },
+        {
+          "title": "夜",
+          "deezerRank": 32162,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Friend Ship",
+          "deezerRank": 82116,
+          "genre": "J-POP"
+        },
+        {
+          "title": "化物",
+          "deezerRank": 78287,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ワークソング",
+          "deezerRank": 23771,
+          "genre": "J-POP"
+        },
+        {
+          "title": "夢の外へ",
+          "deezerRank": 88854,
+          "genre": "J-POP"
+        },
+        {
+          "title": "フィルム",
+          "deezerRank": 42290,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ツアー",
+          "deezerRank": 35514,
+          "genre": "J-POP"
+        },
+        {
+          "title": "スカート",
+          "deezerRank": 8862,
+          "genre": "J-POP"
+        },
+        {
+          "title": "生まれ変わり",
+          "deezerRank": 71977,
+          "genre": "J-POP"
+        },
+        {
+          "title": "パロディ",
+          "deezerRank": 3439,
+          "genre": "J-POP"
+        },
+        {
+          "title": "季節",
+          "deezerRank": 17759,
+          "genre": "J-POP"
+        },
+        {
+          "title": "レコードノイズ",
+          "deezerRank": 31425,
+          "genre": "J-POP"
+        },
+        {
+          "title": "知らない",
+          "deezerRank": 31690,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ある車掌",
+          "deezerRank": 64398,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Stranger",
+          "deezerRank": 36085,
+          "genre": "J-POP"
+        },
+        {
+          "title": "エピソード",
+          "deezerRank": 21788,
+          "genre": "J-POP"
+        },
+        {
+          "title": "湯気",
+          "deezerRank": 8118,
+          "genre": "J-POP"
+        },
+        {
+          "title": "変わらないまま",
+          "deezerRank": 32717,
+          "genre": "J-POP"
+        },
+        {
+          "title": "くだらないの中に",
+          "deezerRank": 55799,
+          "genre": "J-POP"
+        },
+        {
+          "title": "布団",
+          "deezerRank": 85641,
+          "genre": "J-POP"
+        },
+        {
+          "title": "バイト",
+          "deezerRank": 11255,
+          "genre": "J-POP"
+        },
+        {
+          "title": "営業",
+          "deezerRank": 55066,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ステップ",
+          "deezerRank": 55060,
+          "genre": "J-POP"
+        },
+        {
+          "title": "未来",
+          "deezerRank": 48447,
+          "genre": "J-POP"
+        },
+        {
+          "title": "喧嘩",
+          "deezerRank": 29636,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ストーブ",
+          "deezerRank": 26783,
+          "genre": "J-POP"
+        },
+        {
+          "title": "日常",
+          "deezerRank": 24600,
+          "genre": "J-POP"
+        },
+        {
+          "title": "予想",
+          "deezerRank": 31200,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ばらばら",
+          "deezerRank": 95333,
+          "genre": "J-POP"
+        },
+        {
+          "title": "グー",
+          "deezerRank": 25188,
+          "genre": "J-POP"
+        },
+        {
+          "title": "キッチン",
+          "deezerRank": 38821,
+          "genre": "J-POP"
+        },
+        {
+          "title": "茶碗",
+          "deezerRank": 32596,
+          "genre": "J-POP"
+        },
+        {
+          "title": "デイジーお味噌汁 (Instrumental)",
+          "deezerRank": 48534,
+          "genre": "J-POP"
+        },
+        {
+          "title": "夜中唄",
+          "deezerRank": 57044,
+          "genre": "J-POP"
+        },
+        {
+          "title": "老夫婦",
+          "deezerRank": 31963,
+          "genre": "J-POP"
+        },
+        {
+          "title": "くせのうた",
+          "deezerRank": 40312,
+          "genre": "J-POP"
+        },
+        {
+          "title": "兄妹",
+          "deezerRank": 31638,
+          "genre": "J-POP"
+        },
+        {
+          "title": "子供",
+          "deezerRank": 40556,
+          "genre": "J-POP"
+        },
+        {
+          "title": "さようならのうみ (Instrumental)",
+          "deezerRank": 31373,
+          "genre": "J-POP"
+        },
+        {
+          "title": "穴を掘る",
+          "deezerRank": 50384,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ただいま",
+          "deezerRank": 48274,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ひらめき",
+          "deezerRank": 31963,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ばかのうた",
+          "deezerRank": 50900,
+          "genre": "J-POP"
+        },
+        {
+          "title": "光の跡",
+          "deezerRank": 275214,
+          "genre": "J-POP"
+        },
+        {
+          "title": "おともだち",
+          "deezerRank": 59030,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Beyond the Sequence",
+          "deezerRank": 17948,
+          "genre": "J-POP"
+        },
+        {
+          "title": "灯台 (Live Session)",
+          "deezerRank": 18126,
+          "genre": "J-POP"
+        },
+        {
+          "title": "解答者 (Live Session)",
+          "deezerRank": 26358,
+          "genre": "J-POP"
+        },
+        {
+          "title": "仲間はずれ (Live Session)",
+          "deezerRank": 51552,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Orange (feat. MC. waka)",
+          "deezerRank": 71206,
+          "genre": "J-POP"
+        },
+        {
+          "title": "しかたなく踊る (Live Session)",
+          "deezerRank": 116931,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Mad Hope - Short (feat. Louis Cole, Sam Gendel)",
+          "deezerRank": 30074,
+          "genre": "J-POP"
+        },
+        {
+          "title": "うちで踊ろう (大晦日)",
+          "deezerRank": 150900,
+          "genre": "J-POP"
+        },
+        {
+          "title": "そしたら",
+          "deezerRank": 37206,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Same Thing (feat. Superorganism)",
+          "deezerRank": 11751,
+          "genre": "J-POP"
+        },
+        {
+          "title": "さらしもの (feat. PUNPEE)",
+          "deezerRank": 70386,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Ain't Nobody Know",
+          "deezerRank": 109945,
+          "genre": "J-POP"
+        },
+        {
+          "title": "私",
+          "deezerRank": 19894,
+          "genre": "J-POP"
+        },
+        {
+          "title": "プリン",
+          "deezerRank": 7933,
+          "genre": "J-POP"
+        },
+        {
+          "title": "KIDS (House ver.)",
+          "deezerRank": 25483,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Drinking Dance",
+          "deezerRank": 72312,
+          "genre": "J-POP"
+        },
+        {
+          "title": "雨音 (House ver.)",
+          "deezerRank": 26700,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Moon Sick",
+          "deezerRank": 33302,
+          "genre": "J-POP"
+        },
+        {
+          "title": "いち に さん",
+          "deezerRank": 21262,
+          "genre": "J-POP"
+        },
+        {
+          "title": "マッドメン (House ver.)",
+          "deezerRank": 22231,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Night Troop",
+          "deezerRank": 67804,
+          "genre": "J-POP"
+        },
+        {
+          "title": "海を掬う (House ver.)",
+          "deezerRank": 31806,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ダンサー",
+          "deezerRank": 2218,
+          "genre": "J-POP"
+        },
+        {
+          "title": "おもかげ (House ver.)",
+          "deezerRank": 8967,
+          "genre": "J-POP"
+        },
+        {
+          "title": "彼方",
+          "deezerRank": 1703,
+          "genre": "J-POP"
+        },
+        {
+          "title": "電波塔 (House ver.)",
+          "deezerRank": 26757,
+          "genre": "J-POP"
+        },
+        {
+          "title": "もしも",
+          "deezerRank": 31569,
+          "genre": "J-POP"
+        },
+        {
+          "title": "乱視",
+          "deezerRank": 9597,
+          "genre": "J-POP"
+        },
+        {
+          "title": "次は何に産まれましょうか (House ver.)",
+          "deezerRank": 37208,
+          "genre": "J-POP"
+        },
+        {
+          "title": "落下 (House ver.)",
+          "deezerRank": 21902,
+          "genre": "J-POP"
+        },
+        {
+          "title": "歌を歌うときは",
+          "deezerRank": 40671,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ブランコ (House ver.)",
+          "deezerRank": 31534,
+          "genre": "J-POP"
+        },
+        {
+          "title": "くせのうた (House ver.)",
+          "deezerRank": 31444,
+          "genre": "J-POP"
+        },
+        {
+          "title": "いきどまり",
+          "deezerRank": 165715,
+          "genre": "J-POP"
+        },
+        {
+          "title": "異世界混合大舞踏会 (feat. おばけ)",
+          "deezerRank": 142370,
+          "genre": "J-POP"
+        },
+        {
+          "title": "喜劇 (feat. DJ Jazzy Jeff & Kaidi Tatham)",
+          "deezerRank": 108348,
+          "genre": "J-POP"
+        },
+        {
+          "title": "Cube",
+          "deezerRank": 18655,
+          "genre": "J-POP"
+        },
+        {
+          "title": "折り合い",
+          "deezerRank": 67807,
+          "genre": "J-POP"
+        },
+        {
+          "title": "うちで踊ろう (Potluck Mix)",
+          "deezerRank": 21945,
+          "genre": "J-POP"
+        },
+        {
+          "title": "うちで踊ろう",
+          "deezerRank": 26384,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ドラえもん",
+          "deezerRank": 166719,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ここにいないあなたへ",
+          "deezerRank": 47938,
+          "genre": "J-POP"
+        },
+        {
+          "title": "The Shower",
+          "deezerRank": 1876,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ドラえもんのうた (House ver.)",
+          "deezerRank": 32303,
+          "genre": "J-POP"
+        },
+        {
+          "title": "地獄でなぜ悪い （Karaoke)",
+          "deezerRank": 88518,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ギャグ",
+          "deezerRank": 31636,
+          "genre": "J-POP"
+        },
+        {
+          "title": "ダスト",
+          "deezerRank": 7916,
+          "genre": "J-POP"
         }
       ],
-      "reading": "ほしのげん"
+      "reading": "ほしのげん",
+      "genre": "J-POP",
+      "deezerId": 4800610
     },
     {
       "name": "菅田将暉",
