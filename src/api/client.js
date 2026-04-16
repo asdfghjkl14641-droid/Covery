@@ -19,6 +19,18 @@ export async function fetchSongs(limit = 20, random = true) {
   return apiFetch(`/api/songs?limit=${limit}&random=${random}`)
 }
 
+export async function fetchSongsBatch(songIds) {
+  if (!Array.isArray(songIds) || songIds.length === 0) return { songs: [] }
+  const chunks = []
+  for (let i = 0; i < songIds.length; i += 100) {
+    chunks.push(songIds.slice(i, i + 100))
+  }
+  const results = await Promise.all(
+    chunks.map(chunk => apiFetch(`/api/songs/batch?ids=${chunk.join(',')}`))
+  )
+  return { songs: results.flatMap(r => r?.songs || []) }
+}
+
 export async function fetchSongCovers(songId) {
   return apiFetch(`/api/songs/${songId}/covers`)
 }
