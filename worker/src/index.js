@@ -1,5 +1,5 @@
 import { corsResponse, jsonResponse, errorResponse } from './utils/cors.js'
-import { handleSongs, handleSongCovers } from './routes/songs.js'
+import { handleSongs, handleSongsBatch, handleSongCovers } from './routes/songs.js'
 import { handleArtists, handleArtistSongs } from './routes/artists.js'
 import { handleChannelCovers, handleSingers, handleSimilarSingers } from './routes/channels.js'
 import { handleSearch } from './routes/search.js'
@@ -26,6 +26,7 @@ export default {
       }
 
       // ── Public API ──
+      if (path === '/api/songs/batch' && method === 'GET') return await handleSongsBatch(request, env)
       if (path === '/api/songs' && method === 'GET') return await handleSongs(request, env)
 
       const songCoversMatch = path.match(/^\/api\/songs\/(\d+)\/covers$/)

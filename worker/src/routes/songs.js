@@ -1,5 +1,78 @@
 import { jsonResponse, errorResponse } from '../utils/cors.js'
 
+export async function handleSongsBatch(request, env) {
+  const url = new URL(request.url)
+  const idsParam = url.searchParams.get('ids') || ''
+  const ids = idsParam
+    .split(',')
+    .map(s => parseInt(s.trim(), 10))
+    .filter(n => Number.isInteger(n) && n > 0)
+
+  if (ids.length === 0) return jsonResponse({ songs: [] })
+  if (ids.length > 100) return errorResponse('Too many ids (max 100)', 400)
+
+  try {
+    const placeholders = ids.map(() => '?').join(',')
+
+    const songsResult = await env.DB.prepare(`
+      SELECT s.id AS song_id, s.title, s.deezer_rank, s.genre,
+        a.id AS artist_id, a.name AS artist_name, a.image_url AS artist_image_url, a.genre AS artist_genre
+      FROM songs s
+      JOIN artists a ON a.id = s.artist_id
+      WHERE s.id IN (${placeholders})
+    `).bind(...ids).all()
+
+    const coversResult = await env.DB.prepare(`
+      SELECT c.video_id, c.song_id, c.youtube_title, c.view_count, c.published_at, c.duration,
+        ch.channel_id AS yt_channel_id, ch.channel_name, ch.thumbnail_url AS channel_thumbnail
+      FROM covers c
+      JOIN channels ch ON ch.id = c.channel_id
+      WHERE c.song_id IN (${placeholders})
+        AND c.status = 'approved' AND ch.status = 'approved'
+      ORDER BY c.view_count DESC
+    `).bind(...ids).all()
+
+    const coversBySongId = {}
+    for (const cov of (coversResult.results || [])) {
+      if (!coversBySongId[cov.song_id]) coversBySongId[cov.song_id] = []
+      coversBySongId[cov.song_id].push({
+        videoId: cov.video_id,
+        youtubeTitle: cov.youtube_title,
+        viewCount: cov.view_count,
+        publishedAt: cov.published_at,
+        duration: cov.duration,
+        channel: {
+          channelId: cov.yt_channel_id,
+          channelName: cov.channel_name,
+          thumbnailUrl: cov.channel_thumbnail,
+        },
+      })
+    }
+
+    const songs = (songsResult.results || []).map(row => ({
+      id: row.song_id,
+      title: row.title,
+      deezerRank: row.deezer_rank,
+      genre: row.genre || row.artist_genre || '',
+      artist: {
+        id: row.artist_id,
+        name: row.artist_name,
+        imageUrl: row.artist_image_url || '',
+        genre: row.artist_genre || '',
+      },
+      covers: coversBySongId[row.song_id] || [],
+    }))
+
+    // Preserve requested id order (user's favorites order)
+    const songsById = Object.fromEntries(songs.map(s => [s.id, s]))
+    const orderedSongs = ids.map(id => songsById[id]).filter(Boolean)
+
+    return jsonResponse({ songs: orderedSongs })
+  } catch (e) {
+    return errorResponse(e.message)
+  }
+}
+
 export async function handleSongs(request, env) {
   const url = new URL(request.url)
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100)
