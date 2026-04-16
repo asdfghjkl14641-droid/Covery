@@ -18,6 +18,37 @@ const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 // ══════════════════════════════════════════════════════════
+//  PROCESSED ARTISTS LOG (persistent skip list)
+// ══════════════════════════════════════════════════════════
+const PROCESSED_LOG_PATH = path.join(__dirname, 'logs', 'processed-artists.json')
+
+function loadProcessedLog() {
+  try {
+    if (fs.existsSync(PROCESSED_LOG_PATH)) {
+      const data = JSON.parse(fs.readFileSync(PROCESSED_LOG_PATH, 'utf8'))
+      return data.processed || []
+    }
+  } catch (_) {}
+  return []
+}
+
+function saveProcessedLog(entries) {
+  const dir = path.dirname(PROCESSED_LOG_PATH)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(PROCESSED_LOG_PATH, JSON.stringify({ processed: entries }, null, 2))
+}
+
+function appendProcessedArtist(entries, name, deezerId, songCount) {
+  entries.push({
+    name,
+    deezerId,
+    processedAt: new Date().toISOString(),
+    songCount,
+  })
+  saveProcessedLog(entries)
+}
+
+// ══════════════════════════════════════════════════════════
 //  HARDCODED JAPANESE ARTIST LIST (200+ artists)
 //  These are searched directly on Deezer with Japanese names
 // ══════════════════════════════════════════════════════════
@@ -517,27 +548,38 @@ async function deezerResolveGenre(deezerId) {
 // ══════════════════════════════════════════════════════════
 async function buildCatalog() {
   const startTime = Date.now()
-  console.log('=== Covery Catalog Builder v5 (Deezer-only snowball) ===\n')
+  console.log('=== Covery Catalog Builder v5.1 (with processed-artists skip) ===\n')
   loadCache()
 
   const catalog = loadExisting()
   const byName = new Map(catalog.artists.map(a => [a.name.toLowerCase(), a]))
-  console.log(`Loaded existing catalog: ${catalog.artists.length} artists\n`)
+  console.log(`Loaded existing catalog: ${catalog.artists.length} artists`)
+
+  // ── Load processed artists log ──
+  const processedLog = loadProcessedLog()
+  const processedNames = new Set(processedLog.map(p => p.name.toLowerCase()))
+  console.log(`処理済みログ: ${processedLog.length}件ロード\n`)
 
   const seedNames = new Set(JP_ARTISTS)
   const queue = []          // [{deezerId, displayName}]
   const seenIds = new Set()
   const processed = new Set()
 
-  // ── Seed queue via Deezer search ──
+  // ── Seed queue via Deezer search (skip already processed) ──
   console.log(`── Deezer検索で ${JP_ARTISTS.length} 件の初期アーティストを解決 ──`)
+  let seedSkipped = 0
   for (const name of JP_ARTISTS) {
+    if (processedNames.has(name.toLowerCase())) {
+      seedSkipped++
+      continue
+    }
     const hit = await deezerSearchArtist(name)
     if (hit && !seenIds.has(hit.id)) {
       queue.push({ deezerId: hit.id, displayName: name })
       seenIds.add(hit.id)
     }
   }
+  if (seedSkipped > 0) console.log(`  [スキップ合計] ${seedSkipped}組 (処理済み)`)
   console.log(`  → キュー開始: ${queue.length}件\n`)
 
   const MAX_ARTISTS = 5000
@@ -560,6 +602,9 @@ async function buildCatalog() {
     const name = seedNames.has(displayName)
       ? displayName
       : (resolveJapaneseName(rawName) || rawName)
+
+    // Skip already processed
+    if (processedNames.has(name.toLowerCase())) continue
 
     // Japanese check — skip non-Japanese unless explicitly seeded
     if (!isJapaneseArtist({ name }, seedNames) && !seedNames.has(displayName)) {
@@ -620,6 +665,11 @@ async function buildCatalog() {
     console.log(`  [Deezer] 関連アーティスト ${related.length}組（うち日本${queuedRelated}組）`)
 
     processedCount++
+
+    // Record to persistent log immediately (survives crash)
+    appendProcessedArtist(processedLog, name, deezerId, entry.songs.length)
+    processedNames.add(name.toLowerCase())
+
     const totalSongs = catalog.artists.reduce((n, a) => n + (a.songs?.length || 0), 0)
     console.log(`  進捗: ${processedCount}組処理済み / キュー残り${queue.length} / 合計${totalSongs}曲\n`)
 
